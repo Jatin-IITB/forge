@@ -1,0 +1,35 @@
+[project]
+name = "forge"
+version = "0.0.1"
+description = "Task-specialization distillation pipeline — manufacture a verified small specialist that matches a teacher within tolerance at 10-100x lower cost."
+readme = "README.md"
+requires-python = ">=3.10"
+# Phase 0 ships only contract + schema, so deps are intentionally tiny.
+# Modelling deps (torch, transformers, peft, trl, vllm, outlines) arrive in Phase 2+.
+dependencies = [
+    "pydantic>=2.6",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+data = [
+    "faker>=24.0",   # MIT — synthetic PII values for the gold/train builder
+]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.4",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["forge"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
