@@ -1,0 +1,39 @@
+# --- Secrets / env ---
+.env
+.env.*
+*.key
+secrets/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.ipynb_checkpoints/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# --- Large artifacts: NEVER commit weights / big generated data ---
+# (use a model registry or release assets instead)
+models/
+checkpoints/
+*.safetensors
+*.bin
+*.gguf
+*.pt
+*.onnx
+wandb/
+runs/
+
+# Generated / synthetic data (bulk). Keep the small curated gold set tracked.
+data/generated/
+data/synthetic/
+data/cache/
+!data/gold/
+
+# --- OS / editor ---
+.DS_Store
+.idea/
+.vscode/
