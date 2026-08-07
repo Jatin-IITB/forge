@@ -281,6 +281,18 @@ def test_extract_json_unfenced_with_surrounding_text():
     assert result["spans"] == []
 
 
+def test_extract_json_with_think_tags():
+    raw = '<think>\nLet me analyze this text for PII.\nI see a person name.\n</think>\n{"spans": [{"label": "PERSON", "text": "Alice"}]}'
+    result = _extract_json(raw)
+    assert result["spans"][0]["text"] == "Alice"
+
+
+def test_extract_json_with_think_tags_and_json_inside():
+    raw = '<think>\nThe text mentions {"name": "Bob"} which is PII.\n</think>\n{"spans": [{"label": "PERSON", "text": "Bob"}]}'
+    result = _extract_json(raw)
+    assert result["spans"][0]["text"] == "Bob"
+
+
 def test_reconstruct_unicode_emoji():
     text = "Contact \U0001f600 Alice at a@b.com"
     raw_spans = [

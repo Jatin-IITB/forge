@@ -18,6 +18,15 @@ data = [
 infer = [
     "openai>=1.0",   # OpenAI-compatible API client for vLLM / Ollama / etc.
 ]
+train = [
+    "torch>=2.1",
+    "transformers>=4.40",
+    "peft>=0.10",
+    "trl>=0.8",
+    "datasets>=2.18",
+    "accelerate>=0.28",
+    "bitsandbytes>=0.43",
+]
 dev = [
     "pytest>=8.0",
     "ruff>=0.4",

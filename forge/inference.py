@@ -89,7 +89,7 @@ def build_messages(text: str, teacher_mode: bool = False) -> list[dict[str, str]
 
 def _extract_json(raw: str) -> dict:
     """Extract JSON from model output, handling markdown code fences and surrounding text."""
-    raw = raw.strip()
+    raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
     fence = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw, re.DOTALL)
     if fence:
         return json.loads(fence.group(1))
