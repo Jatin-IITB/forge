@@ -48,9 +48,10 @@ gates:
     - { label: SSN,           min_recall: 0.99 }
     - { label: AADHAAR,       min_recall: 0.99 }
     - { label: PAN,           min_recall: 0.99 }
-    - { label: PASSPORT,      min_recall: 0.99 }
-    - { label: PASSWORD,      min_recall: 0.99 }
-    - { label: API_KEY,       min_recall: 0.99 }
+    - { label: PASSPORT,       min_recall: 0.99 }
+    - { label: DRIVER_LICENSE, min_recall: 0.99 }
+    - { label: PASSWORD,       min_recall: 0.99 }
+    - { label: API_KEY,        min_recall: 0.99 }
 
 # Teacher: open-weight, Apache-2.0 (no distillation restriction). See ADR 0005.
 teacher:

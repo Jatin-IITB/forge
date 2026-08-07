@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from forge.contracts import TaskContract, load_contract
 
@@ -17,7 +18,7 @@ def test_contract_loads_and_validates():
 
 def test_contract_is_immutable():
     c = load_contract(CONTRACT)
-    with pytest.raises(Exception):  # frozen model
+    with pytest.raises(ValidationError):  # frozen model
         c.task_id = "mutated"  # type: ignore[misc]
 
 

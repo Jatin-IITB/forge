@@ -19,7 +19,6 @@ Design choices:
 from __future__ import annotations
 
 from enum import Enum
-from typing import List
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -86,7 +85,7 @@ class PIISpan(BaseModel):
     text: str = Field(min_length=1, description="Surface string; must equal text[start:end].")
 
     @model_validator(mode="after")
-    def _check_range(self) -> "PIISpan":
+    def _check_range(self) -> PIISpan:
         if self.end <= self.start:
             raise ValueError(f"span end ({self.end}) must be > start ({self.start})")
         return self
@@ -101,7 +100,7 @@ class PIIRecord(BaseModel):
 
     id: str = Field(min_length=1)
     text: str = Field(min_length=1)
-    spans: List[PIISpan] = Field(default_factory=list)
+    spans: list[PIISpan] = Field(default_factory=list)
     lang: str = Field(default="en", description="ISO-639-1 language code.")
     source: str = Field(
         default="synthetic:faker",
@@ -110,7 +109,7 @@ class PIIRecord(BaseModel):
     split: str = Field(default="test", pattern="^(dev|test|train)$")
 
     @model_validator(mode="after")
-    def _check_spans(self) -> "PIIRecord":
+    def _check_spans(self) -> PIIRecord:
         n = len(self.text)
         ordered = sorted(self.spans, key=lambda s: (s.start, s.end))
         prev_end = -1

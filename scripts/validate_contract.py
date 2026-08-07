@@ -13,7 +13,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 
@@ -29,7 +28,7 @@ def validate_gold(path: Path) -> int:
             continue
         try:
             PIIRecord.model_validate_json(line)
-        except Exception as e:  # noqa: BLE001 - surface the offending line
+        except Exception as e:
             print(f"  [FAIL] {path}:{i}: {e}")
             raise
         n += 1

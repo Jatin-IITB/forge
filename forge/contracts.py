@@ -13,10 +13,11 @@ instead of silently producing a meaningless run. Pure structure — no modelling
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Optional
 
 import yaml
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from forge.schema import PIIType
 
 
 class ModelRef(BaseModel):
@@ -28,14 +29,14 @@ class ModelRef(BaseModel):
     distillation_permitted: bool = Field(
         description="True iff the licence permits training other models on its outputs."
     )
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class MetricSpec(BaseModel):
     """Primary + secondary metrics. The primary is what the parity gate is computed on."""
 
     primary: str = Field(min_length=1)
-    secondary: List[str] = Field(default_factory=list)
+    secondary: list[str] = Field(default_factory=list)
     span_match: str = Field(
         default="exact",
         pattern="^(exact|partial|overlap)$",
@@ -48,6 +49,16 @@ class RecallFloor(BaseModel):
 
     label: str
     min_recall: float = Field(ge=0.0, le=1.0)
+
+    @field_validator("label")
+    @classmethod
+    def _label_is_valid_pii_type(cls, v: str) -> str:
+        try:
+            PIIType(v)
+        except ValueError:
+            valid = ", ".join(t.value for t in PIIType)
+            raise ValueError(f"{v!r} is not a valid PIIType. Valid: {valid}") from None
+        return v
 
 
 class Gates(BaseModel):
@@ -63,7 +74,7 @@ class Gates(BaseModel):
     p95_ratio_max: float = Field(
         gt=0.0, description="student_p95 <= teacher_p95 * p95_ratio_max."
     )
-    high_severity_recall_floors: List[RecallFloor] = Field(default_factory=list)
+    high_severity_recall_floors: list[RecallFloor] = Field(default_factory=list)
     ood_refusal_min: float = Field(ge=0.0, le=1.0, default=0.90)
 
 
@@ -83,7 +94,7 @@ class DataProvenance(BaseModel):
 
     gold_source: str = Field(min_length=1)
     gold_license: str = Field(min_length=1)
-    rejected_sources: List[str] = Field(default_factory=list)
+    rejected_sources: list[str] = Field(default_factory=list)
     leakage_policy: str = Field(min_length=1)
 
 
@@ -114,7 +125,7 @@ class TaskContract(BaseModel):
     data: DataProvenance
 
     @model_validator(mode="after")
-    def _independence(self) -> "TaskContract":
+    def _independence(self) -> TaskContract:
         # ADR 0003: the asset must be rebuildable by a stranger. Enforce it structurally.
         if not self.teacher.distillation_permitted:
             raise ValueError(

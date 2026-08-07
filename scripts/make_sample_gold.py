@@ -12,16 +12,14 @@ hand-counted: a segment is either plain text or a (value, label) PII tuple.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from typing import List, Tuple, Union
 
 from forge.schema import PIIRecord, PIISpan, PIIType
 
 # A segment is plain text, or a PII value tagged with its type.
-Segment = Union[str, Tuple[str, PIIType]]
+Segment = str | tuple[str, PIIType]
 
-EXAMPLES: List[Tuple[str, str, List[Segment]]] = [
+EXAMPLES: list[tuple[str, str, list[Segment]]] = [
     (
         "sample-0001",
         "en",
@@ -82,9 +80,9 @@ EXAMPLES: List[Tuple[str, str, List[Segment]]] = [
 ]
 
 
-def build(example_id: str, lang: str, segments: List[Segment]) -> PIIRecord:
-    text_parts: List[str] = []
-    spans: List[PIISpan] = []
+def build(example_id: str, lang: str, segments: list[Segment]) -> PIIRecord:
+    text_parts: list[str] = []
+    spans: list[PIISpan] = []
     cursor = 0
     for seg in segments:
         if isinstance(seg, str):
