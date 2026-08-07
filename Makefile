@@ -4,10 +4,12 @@
 CONTRACT ?= contracts/pii_redaction_v1.yaml
 GOLD     ?= data/gold/test.jsonl
 PREDS    ?= predictions.jsonl
+TRAIN    ?= data/train.jsonl
+SEEDS    ?= data/gold/dev.jsonl
 MODEL    ?= Qwen/Qwen2.5-32B-Instruct
 PYTHON   ?= python
 
-.PHONY: help install validate gold gold-sample infer eval test lint forge
+.PHONY: help install validate gold gold-sample infer data-engine eval test lint forge
 
 help:
 	@echo "Forge targets:"
@@ -36,6 +38,9 @@ gold-sample:
 
 infer:
 	$(PYTHON) scripts/run_inference.py $(GOLD) $(PREDS) --model $(MODEL)
+
+data-engine:
+	$(PYTHON) scripts/run_data_engine.py --seed-texts $(SEEDS) --gold $(GOLD) --output $(TRAIN) --model $(MODEL)
 
 eval:
 	$(PYTHON) scripts/run_eval.py $(GOLD) $(PREDS) --check-gates --contract $(CONTRACT)
