@@ -15,6 +15,9 @@ dependencies = [
 data = [
     "faker>=24.0",   # MIT — synthetic PII values for the gold/train builder
 ]
+infer = [
+    "openai>=1.0",   # OpenAI-compatible API client for vLLM / Ollama / etc.
+]
 dev = [
     "pytest>=8.0",
     "ruff>=0.4",
