@@ -28,6 +28,17 @@ def test_build_messages_preserves_text_exactly():
     assert text in msgs[1]["content"]
 
 
+def test_build_messages_teacher_mode():
+    msgs = build_messages("Hello world", teacher_mode=True)
+    assert "rationale" in msgs[0]["content"]
+    assert "training data" in msgs[0]["content"]
+
+
+def test_build_messages_default_is_not_teacher():
+    msgs = build_messages("Hello world")
+    assert "rationale" not in msgs[0]["content"]
+
+
 # --- _extract_json ---
 
 def test_extract_json_plain():

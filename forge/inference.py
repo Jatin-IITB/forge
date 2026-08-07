@@ -45,12 +45,44 @@ capitalization, or punctuation.
 - Generic place names used as context (e.g. "weather in Mumbai") are NOT PII.
 """
 
+TEACHER_SYSTEM_PROMPT = """\
+You are a PII (Personally Identifiable Information) detection system used \
+to generate training data. You must be thorough and explain your reasoning.
+
+Given the input text, identify ALL PII entities and return them as a JSON object.
+
+For each PII entity, provide:
+- "label": the PII type (see valid types below)
+- "text": the EXACT substring from the input text (copy-paste, do not rephrase)
+- "rationale": a brief explanation of WHY this is PII of this type (one sentence)
+
+Valid PII types:
+PERSON, EMAIL, PHONE, STREET_ADDRESS, USERNAME, URL, IP_ADDRESS,
+LOCATION, DATE_OF_BIRTH, AGE, CREDIT_CARD, BANK_ACCOUNT, SSN,
+AADHAAR, PAN, PASSPORT, DRIVER_LICENSE, PASSWORD, API_KEY
+
+Return format (strict JSON, no markdown):
+{"spans": [{"label": "PERSON", "text": "Jane Doe", "rationale": "full name in email greeting"}, ...]}
+
+If NO PII is found, return:
+{"spans": []}
+
+Rules:
+- Return ONLY the JSON object, nothing else.
+- The "text" field must be an EXACT substring of the input — do not modify spacing, \
+capitalization, or punctuation.
+- Report every occurrence; do not skip duplicates.
+- Generic place names used as context (e.g. "weather in Mumbai") are NOT PII.
+- Be thorough — missing a PII entity is worse than a false positive.
+"""
+
 USER_TEMPLATE = "Detect all PII in this text:\n\n{text}"
 
 
-def build_messages(text: str) -> list[dict[str, str]]:
+def build_messages(text: str, teacher_mode: bool = False) -> list[dict[str, str]]:
+    prompt = TEACHER_SYSTEM_PROMPT if teacher_mode else SYSTEM_PROMPT
     return [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": prompt},
         {"role": "user", "content": USER_TEMPLATE.format(text=text)},
     ]
 
