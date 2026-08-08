@@ -124,8 +124,17 @@ def majority_vote_spans(samples: list[PIIRecord], threshold: float = 0.5) -> tup
             agreements.append(count / k)
 
     consensus.sort(key=lambda s: s.start)
+
+    # Drop overlapping spans (keep earlier/longer)
+    deduped = []
+    prev_end = -1
+    for s in consensus:
+        if s.start >= prev_end:
+            deduped.append(s)
+            prev_end = s.end
+
     agreement_ratio = sum(agreements) / len(agreements) if agreements else (1.0 if not span_counts else 0.0)
-    return consensus, agreement_ratio
+    return deduped, agreement_ratio
 
 
 def verify_record(

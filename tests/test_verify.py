@@ -72,6 +72,22 @@ def test_all_empty_spans():
     assert agreement == 1.0
 
 
+def test_overlapping_consensus_spans_deduped():
+    text = "Name Alice Smith here"
+    span_full = _span(5, 16, PIIType.PERSON, "Alice Smith")
+    span_first = _span(5, 10, PIIType.PERSON, "Alice")
+    # Different samples pick different granularity — both pass majority vote
+    # but overlap. model_construct bypasses Pydantic overlap validator.
+    samples = [
+        _rec(text, [span_full]),
+        PIIRecord.model_construct(id="t1", text=text, spans=[span_first], split="train"),
+        PIIRecord.model_construct(id="t1", text=text, spans=[span_first], split="train"),
+    ]
+    consensus, _ = majority_vote_spans(samples)
+    for i in range(len(consensus) - 1):
+        assert consensus[i].end <= consensus[i + 1].start, "overlapping spans in consensus"
+
+
 def test_different_labels_same_offsets():
     text = "Number 12345"
     samples = [
