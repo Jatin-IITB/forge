@@ -2,6 +2,10 @@
 
 A phased plan with **exit gates** (a phase is not "done" until its gate passes), deliverables, the compute/cost budget, and the risk register. Pacing assumes one strong engineer, evenings/weekends; calendar estimates are ranges, not commitments.
 
+> **Companion doc:** `docs/NORTH_STAR.md` holds the claim ledger (every public claim → repo
+> evidence → status) and the execution arcs that close it. The phases below are the general
+> playbook; the ledger is what "done" is measured against.
+
 > **Rule inherited from Aroha:** every phase ends in a *checkable artifact*, not a vibe. No phase is "done" because it feels done.
 
 ---
@@ -77,6 +81,10 @@ A phased plan with **exit gates** (a phase is not "done" until its gate passes),
 2. If gate **met** → go to Phase 5.
 3. If **not met** → cluster failures (by slice/error type), write an error report, and hand the clusters to the **Data Engine (Phase 2)** for targeted generation. Retrain (Phase 3). Repeat.
 4. Track each loop iteration's cost so the active-learning ROI is visible.
+5. **Teacher scale-up (`adr/0010`):** before final parity claims, the teacher moves from the
+   local 8B development teacher to **Qwen3-32B via a hosted open-weight endpoint**; the 32B is
+   scored on the frozen test set (redoing the Phase-1 baseline once) and the loop's targeted
+   generation spends against it. G1 parity is measured against the 32B bar only.
 
 **Exit gate (the headline gate):** all six gates in `SUCCESS.md` pass on the frozen test set, with CIs.
 

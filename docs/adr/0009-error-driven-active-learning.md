@@ -3,7 +3,7 @@
 **Status:** accepted  
 **Date:** 2026-08-11  
 **Context:** Phase 3 produced a LoRA student (run_001) with micro-F1 0.52, far below the
-0.95 parity gate. Per-type analysis revealed severe training data imbalance as the root
+G1 parity gate (≥0.98× teacher score, `SUCCESS.md`). Per-type analysis revealed severe training data imbalance as the root
 cause: AADHAAR had 4 training examples vs 29 in the test set, DRIVER_LICENSE 9 vs 15, etc.
 
 ## Decision

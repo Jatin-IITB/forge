@@ -21,13 +21,17 @@ This is a **personal portfolio project** built during an internship. It must dep
 ## Read in this order
 1. `docs/DESIGN.md` — first-principles system design, novelty calibration, field comparison.
 2. `docs/SUCCESS.md` — the six product gates + maturity rubric + what counts as failure.
-3. `docs/ACTION_PLAN.md` — phased plan with exit gates, budget, risks.
-4. `docs/adr/` — decision records (0001 eval-first, 0002 verification gate, 0003 independence).
+3. `docs/NORTH_STAR.md` — the claim ledger (public claims → repo evidence → status) + execution arcs.
+4. `docs/ACTION_PLAN.md` — phased plan with exit gates, budget, risks.
+5. `docs/adr/` — decision records (0001 eval-first … 0010 teacher scale-up).
 
 ## Current status
-**Phase 0** (not started in code). Flagship task (recommended): **on-device PII detection & redaction** — public data, crisply measurable, privacy meaning is airtight. Alternatives: public-document extraction; an under-served-Indian-language specialist.
-
-Phase 0 = lock the `TaskContract`, build & FREEZE a human-verified public gold set, pick open teacher + open base, clear licenses, pass the independence litmus test. **No modeling happens until Phase 0's gate passes (eval-first, `adr/0001`).**
+**Phase 4 — error-driven loop, in progress.** Task locked: **on-device PII detection & redaction**
+(19 types, 9 high-severity). Frozen gold set: 574 records (385 test / 189 dev, Faker seed 42).
+Student: Qwen2.5-1.5B-Instruct + LoRA (MPS fp16). Development teacher: Qwen3-8B (Ollama);
+final teacher: Qwen3-32B via hosted open-weight endpoint (`adr/0010`, pending endpoint).
+run_001 F1 = 0.52 → error analysis → construction-verified augmentation (`adr/0009`, seed 1337)
+→ run_002 training. The claim ledger in `docs/NORTH_STAR.md` tracks what's proven vs pending.
 
 ## Working principles (Aroha doc discipline — portable practice)
 - Eval-first: the frozen gold set + parity gate exist before the model.
