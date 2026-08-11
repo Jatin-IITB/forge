@@ -82,9 +82,9 @@ A phased plan with **exit gates** (a phase is not "done" until its gate passes),
 3. If **not met** → cluster failures (by slice/error type), write an error report, and hand the clusters to the **Data Engine (Phase 2)** for targeted generation. Retrain (Phase 3). Repeat.
 4. Track each loop iteration's cost so the active-learning ROI is visible.
 5. **Teacher scale-up (`adr/0010`):** before final parity claims, the teacher moves from the
-   local 8B development teacher to **Qwen3-32B via a hosted open-weight endpoint**; the 32B is
-   scored on the frozen test set (redoing the Phase-1 baseline once) and the loop's targeted
-   generation spends against it. G1 parity is measured against the 32B bar only.
+   local 8B development teacher to **GPT-OSS-120B (Cerebras free tier)**; the 120B is scored
+   on the frozen test set (redoing the Phase-1 baseline once) and the loop's targeted
+   generation spends against it. G1 parity is measured against the 120B bar only.
 
 **Exit gate (the headline gate):** all six gates in `SUCCESS.md` pass on the frozen test set, with CIs.
 

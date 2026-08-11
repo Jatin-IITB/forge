@@ -31,7 +31,7 @@ Every bullet on the resume, against the repo, as of 2026-08-11:
 
 | # | Claim | Status | Evidence / gap |
 |---|-------|--------|----------------|
-| 1 | Distilled **32B→1.5B** | ❌ **gap** | Teacher is Qwen3-**8B** (local Ollama; 16 GB RAM cannot host 32B). Close via hosted open-weight Qwen3-32B endpoint → ADR 0010. |
+| 1 | Distilled **120B→1.5B** *(amended up from 32B, 2026-08-11)* | 🟡 in progress | Final teacher: GPT-OSS-120B (Apache-2.0, MoE 117B/5.1B active) on Cerebras free tier → ADR 0010. Dev teacher was Qwen3-8B. Honest writeup states both compression ratios (≈78× total-param, ≈3.4× active). |
 | 2 | On-device PII specialist | 🟡 partial | Student is Qwen2.5-1.5B, trains + runs locally. "On-device" fully earned when GGUF artifact passes gates (Arc C). |
 | 3 | ~80× lower cost | ❌ unmeasured | Needs economics harness + published cost model (Arc D). Claim becomes the measured multiple. |
 | 4 | ~20× lower p95 | ❌ unmeasured | Teacher-API p95 vs student on-device p95, same harness (Arc D). Claim becomes the measured multiple. |
@@ -63,14 +63,15 @@ evaluates against the frozen test set. Iterate error-analysis → targeted gener
 until the curve bends hard. This validates the *machinery* even before the teacher upgrade.
 - **Artifact:** `reports/eval_run_002.md` + loop log with per-iteration deltas.
 
-### Arc B — Raise the bar to 32B *(the claim-integrity arc)*
-Stand up Qwen3-32B as teacher via a hosted open-weight endpoint (ADR 0010; independence
-preserved — Apache-2.0 weights, fungible provider, litmus test passes). Score the teacher on
-the frozen test → the real `teacher_score`, `teacher_p95`, `teacher_$/1k` bar. Regenerate the
-teacher-annotated tranche with the 32B where the student is weak; re-distill; loop until
+### Arc B — Raise the bar to 120B *(the claim-integrity arc)*
+Stand up GPT-OSS-120B as teacher via Cerebras free tier (ADR 0010; independence preserved —
+Apache-2.0 weights served by ≥2 hosts + self-hostable, litmus test passes). Score the teacher
+on the frozen test → the real `teacher_score`, `teacher_p95`, `teacher_$/1k` bar. Regenerate
+the teacher-annotated tranche with the 120B where the student is weak; re-distill; loop until
 **G1 (≥0.98×)** and **high-severity recall ≥0.99** hold.
-- **Budget:** hard cap per loop iteration on teacher tokens (order: single-digit $).
-- **Artifact:** `reports/baseline_32b.md`, updated data card, gate table with CIs.
+- **Budget:** $0 (free tier: 5 req/min, 1M tokens/day — rounds sized to the daily budget,
+  engine resume spreads bigger rounds across days).
+- **Artifact:** `reports/baseline_120b.md`, updated data card, gate table with CIs.
 
 ### Arc C — Make it an artifact *(packaging)*
 One QLoRA run (claim 14). DPO decision documented (claim 15). Merge adapter → base; produce

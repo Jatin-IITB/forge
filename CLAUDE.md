@@ -29,7 +29,7 @@ This is a **personal portfolio project** built during an internship. It must dep
 **Phase 4 — error-driven loop, in progress.** Task locked: **on-device PII detection & redaction**
 (19 types, 9 high-severity). Frozen gold set: 574 records (385 test / 189 dev, Faker seed 42).
 Student: Qwen2.5-1.5B-Instruct + LoRA (MPS fp16). Development teacher: Qwen3-8B (Ollama);
-final teacher: Qwen3-32B via hosted open-weight endpoint (`adr/0010`, pending endpoint).
+final teacher: GPT-OSS-120B via Cerebras free tier (`adr/0010`, key = `CEREBRAS_API_KEY`).
 run_001 F1 = 0.52 → error analysis → construction-verified augmentation (`adr/0009`, seed 1337)
 → run_002 training. The claim ledger in `docs/NORTH_STAR.md` tracks what's proven vs pending.
 
