@@ -87,9 +87,15 @@ def build_messages(text: str, teacher_mode: bool = False) -> list[dict[str, str]
     ]
 
 
+_SPANS_ALIASES = ("spans", "pii", "entities", "results", "pii_entities", "data")
+
+
 def _extract_json(raw: str) -> dict:
     """Extract JSON from model output, handling markdown code fences and surrounding text."""
-    raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
+    # Strip think tags — handle truncated (no closing tag) case too
+    raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL)
+    raw = re.sub(r"<think>[^{]*", "", raw)
+    raw = raw.strip()
     fence = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw, re.DOTALL)
     if fence:
         return json.loads(fence.group(1))
@@ -158,9 +164,13 @@ def parse_response(record_id: str, text: str, raw_response: str, split: str = "t
         data = _extract_json(raw_response)
         if not isinstance(data, dict):
             raise TypeError("expected JSON object, got " + type(data).__name__)
-        if "spans" not in data:
-            raise KeyError("missing 'spans' key")
-        raw_spans = data["spans"]
+        raw_spans = None
+        for alias in _SPANS_ALIASES:
+            if alias in data:
+                raw_spans = data[alias]
+                break
+        if raw_spans is None:
+            raise KeyError("missing 'spans' key (tried: " + ", ".join(_SPANS_ALIASES) + ")")
         if not isinstance(raw_spans, list):
             raise TypeError("'spans' is not a list")
         spans = reconstruct_offsets(text, raw_spans)

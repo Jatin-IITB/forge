@@ -63,8 +63,12 @@ def query_teacher(
     max_tokens: int,
     temperature: float,
     timeout: float,
-) -> tuple[PIIRecord | None, bool]:
-    """Query the teacher once and parse the response."""
+) -> tuple[PIIRecord | None, bool, dict]:
+    """Query the teacher once and parse the response.
+
+    Returns (record, schema_valid, trace) where trace captures the raw
+    response and any reasoning content for diagnostics.
+    """
     messages = build_messages(text, teacher_mode=True)
     resp = client.chat.completions.create(
         model=model,
@@ -73,8 +77,14 @@ def query_teacher(
         temperature=temperature,
         timeout=timeout,
     )
-    raw = resp.choices[0].message.content or ""
-    return parse_response("tmp", text, raw, split="train")
+    msg = resp.choices[0].message
+    raw = msg.content or ""
+    reasoning = getattr(msg, "reasoning_content", None) or getattr(msg, "reasoning", None) or ""
+    rec, valid = parse_response("tmp", text, raw, split="train")
+    trace = {"raw": raw, "valid": valid}
+    if reasoning:
+        trace["reasoning"] = reasoning
+    return rec, valid, trace
 
 
 def main() -> int:
@@ -117,30 +127,38 @@ def main() -> int:
     total_api_calls = 0
     total_latency = 0.0
 
+    log_path = args.output.with_suffix(".log.jsonl")
+    log_file = log_path.open("a", encoding="utf-8")
+
     seeds_to_process = [(sid, txt) for sid, txt in seeds if txt not in resumed_texts]
     print(f"seed texts: {len(seeds)} total, {len(seeds_to_process)} to process, k={args.k}, teacher={args.model}")
     print(f"gold records for leakage check: {len(gold_records)}")
+    print(f"teacher log: {log_path}")
     print()
 
     for i, (seed_id, text) in enumerate(seeds_to_process, len(resumed_records) + 1):
         samples = []
         valid_flags = []
         errors = 0
+        traces = []
 
-        for _ in range(args.k):
+        for sample_j in range(args.k):
             try:
                 t0 = time.monotonic()
-                rec, valid = query_teacher(
+                rec, valid, trace = query_teacher(
                     client, text, args.model,
                     args.max_tokens, args.temperature, args.timeout,
                 )
-                total_latency += time.monotonic() - t0
+                trace["latency_s"] = round(time.monotonic() - t0, 2)
+                total_latency += trace["latency_s"]
                 total_api_calls += 1
                 samples.append(rec)
                 valid_flags.append(valid)
-            except Exception:  # noqa: BLE001
+                traces.append(trace)
+            except Exception as exc:  # noqa: BLE001
                 errors += 1
                 total_api_calls += 1
+                traces.append({"error": str(exc), "valid": False})
 
         record_id = f"train_{i:05d}"
         result = verify_record(
@@ -164,6 +182,19 @@ def main() -> int:
         total_target = len(seeds_to_process) + len(resumed_records)
         print(f"  [{i}/{total_target}] {record_id}: {status} ({n_spans} spans, agreement={result.agreement_ratio:.2f}{errs}){' — ' + reasons if reasons else ''}")
 
+        log_entry = {
+            "id": record_id,
+            "seed_id": seed_id,
+            "accepted": result.accepted,
+            "n_spans": n_spans,
+            "agreement": result.agreement_ratio,
+            "reject_reasons": [r.value for r in result.reject_reasons],
+            "traces": traces,
+        }
+        log_file.write(json.dumps(log_entry) + "\n")
+        log_file.flush()
+
+    log_file.close()
     print("\n--- Verification ---")
     print(f"total: {stats.total}, accepted: {stats.accepted} ({stats.accept_rate:.1%})")
     print(f"rejected: consistency={stats.rejected_consistency}, schema={stats.rejected_schema}, empty={stats.rejected_empty}")

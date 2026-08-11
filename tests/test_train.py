@@ -113,4 +113,4 @@ def test_sft_defaults_valid():
     assert SFT_DEFAULTS["num_train_epochs"] > 0
     assert SFT_DEFAULTS["learning_rate"] > 0
     assert SFT_DEFAULTS["seed"] == 42
-    assert SFT_DEFAULTS["max_seq_length"] > 0
+    assert SFT_DEFAULTS["max_length"] > 0

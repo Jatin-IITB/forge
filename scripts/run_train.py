@@ -39,9 +39,8 @@ try:
         AutoModelForCausalLM,
         AutoTokenizer,
         BitsAndBytesConfig,
-        TrainingArguments,
     )
-    from trl import SFTTrainer
+    from trl import SFTConfig, SFTTrainer
 except ImportError as e:
     print(
         f"Missing training dependency: {e}\n"
@@ -61,7 +60,7 @@ def main() -> int:
     ap.add_argument("--batch-size", type=int, default=SFT_DEFAULTS["per_device_train_batch_size"])
     ap.add_argument("--grad-accum", type=int, default=SFT_DEFAULTS["gradient_accumulation_steps"])
     ap.add_argument("--lr", type=float, default=SFT_DEFAULTS["learning_rate"])
-    ap.add_argument("--max-seq-length", type=int, default=SFT_DEFAULTS["max_seq_length"])
+    ap.add_argument("--max-seq-length", type=int, default=SFT_DEFAULTS["max_length"])
     ap.add_argument("--lora-r", type=int, default=LORA_DEFAULTS["r"])
     ap.add_argument("--lora-alpha", type=int, default=LORA_DEFAULTS["lora_alpha"])
     ap.add_argument("--qlora", action="store_true", help="Use 4-bit QLoRA")
@@ -92,12 +91,23 @@ def main() -> int:
             bnb_4bit_use_double_quant=True,
         )
 
+    use_mps = torch.backends.mps.is_available()
+    if use_mps:
+        print("detected Apple Silicon MPS — using fp16 (bf16 causes NaN on MPS)")
+        model_dtype = torch.float16
+        use_bf16 = False
+        use_fp16 = True
+    else:
+        model_dtype = torch.bfloat16 if not args.qlora else None
+        use_bf16 = SFT_DEFAULTS["bf16"]
+        use_fp16 = False
+
     print(f"loading base model: {args.base_model}")
     model = AutoModelForCausalLM.from_pretrained(
         args.base_model,
         quantization_config=quantization_config,
-        torch_dtype=torch.bfloat16 if not args.qlora else None,
-        device_map="auto",
+        dtype=model_dtype,
+        device_map="auto" if not use_mps else None,
         trust_remote_code=True,
     )
 
@@ -121,7 +131,7 @@ def main() -> int:
     dataset = Dataset.from_dict({"messages": conversations})
     dataset = dataset.map(format_conversation)
 
-    training_args = TrainingArguments(
+    sft_config = SFTConfig(
         output_dir=str(args.output_dir),
         num_train_epochs=args.epochs,
         per_device_train_batch_size=args.batch_size,
@@ -131,18 +141,19 @@ def main() -> int:
         lr_scheduler_type=SFT_DEFAULTS["lr_scheduler_type"],
         logging_steps=SFT_DEFAULTS["logging_steps"],
         save_strategy=SFT_DEFAULTS["save_strategy"],
-        bf16=SFT_DEFAULTS["bf16"],
+        bf16=use_bf16,
+        fp16=use_fp16,
         seed=args.seed,
         report_to="none",
         remove_unused_columns=False,
+        max_length=args.max_seq_length,
     )
 
     trainer = SFTTrainer(
         model=model,
-        args=training_args,
+        args=sft_config,
         train_dataset=dataset,
         processing_class=tokenizer,
-        max_seq_length=args.max_seq_length,
     )
 
     resume_from = None
@@ -169,7 +180,7 @@ def main() -> int:
         "batch_size": args.batch_size,
         "grad_accum": args.grad_accum,
         "lr": args.lr,
-        "max_seq_length": args.max_seq_length,
+        "max_length": args.max_seq_length,
         "seed": args.seed,
         "train_examples": len(conversations),
     }

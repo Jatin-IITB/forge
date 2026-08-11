@@ -194,7 +194,7 @@ def test_parse_response_invalid_json():
 
 
 def test_parse_response_missing_spans_key():
-    record, valid = parse_response("r1", "some text", '{"entities": []}')
+    record, valid = parse_response("r1", "some text", '{"foo": []}')
     assert valid is False
     assert len(record.spans) == 0
 
@@ -343,3 +343,52 @@ def test_reconstruct_span_text_is_substring_of_another():
     assert spans[0].text == "123-45-6789"
     assert spans[1].text == "123-45"
     assert text[spans[1].start:spans[1].end] == "123-45"
+
+
+# --- Key alias tests ---
+
+def test_parse_response_entities_alias():
+    text = "Hello Alice"
+    raw = json.dumps({"entities": [{"label": "PERSON", "text": "Alice"}]})
+    record, valid = parse_response("r1", text, raw)
+    assert valid is True
+    assert len(record.spans) == 1
+
+
+def test_parse_response_pii_alias():
+    text = "Hello Bob"
+    raw = json.dumps({"pii": [{"label": "PERSON", "text": "Bob"}]})
+    record, valid = parse_response("r1", text, raw)
+    assert valid is True
+    assert len(record.spans) == 1
+
+
+def test_parse_response_results_alias():
+    text = "Email: a@b.com"
+    raw = json.dumps({"results": [{"label": "EMAIL", "text": "a@b.com"}]})
+    record, valid = parse_response("r1", text, raw)
+    assert valid is True
+    assert len(record.spans) == 1
+
+
+def test_parse_response_spans_preferred_over_alias():
+    text = "Hello Alice"
+    raw = json.dumps({"spans": [{"label": "PERSON", "text": "Alice"}], "entities": []})
+    record, valid = parse_response("r1", text, raw)
+    assert valid is True
+    assert len(record.spans) == 1
+
+
+# --- Truncated think tag tests ---
+
+def test_extract_json_with_truncated_think_tag():
+    raw = '<think>\nLet me analyze this...'
+    # No closing tag — model output was truncated
+    with pytest.raises(json.JSONDecodeError):
+        _extract_json(raw)
+
+
+def test_extract_json_with_truncated_think_then_json():
+    raw = '<think>\nStill thinking about it\n{"spans": [{"label": "PERSON", "text": "Alice"}]}'
+    result = _extract_json(raw)
+    assert result["spans"][0]["text"] == "Alice"

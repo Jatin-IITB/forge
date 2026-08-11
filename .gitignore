@@ -31,6 +31,7 @@ runs/
 data/generated/
 data/synthetic/
 data/cache/
+*.log.jsonl
 !data/gold/
 
 # --- OS / editor ---

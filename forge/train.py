@@ -62,5 +62,5 @@ SFT_DEFAULTS = {
     "save_strategy": "epoch",
     "bf16": True,
     "seed": 42,
-    "max_seq_length": 2048,
+    "max_length": 2048,
 }
