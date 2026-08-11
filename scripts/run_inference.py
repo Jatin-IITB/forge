@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -38,49 +39,80 @@ def load_gold_texts(path: Path) -> list[PIIRecord]:
 
 
 def run_api(args, gold: list[PIIRecord]):
-    """Run inference via an OpenAI-compatible API."""
+    """Run inference via an OpenAI-compatible API.
+
+    Transport robustness (throttle, retry) lives here; scoring semantics —
+    prompts, parsing, metrics — are unchanged. Recorded latency is the
+    successful attempt's server round-trip only, never throttle sleeps.
+    """
     try:
+        import openai
         from openai import OpenAI
     except ImportError:
         print("Install the openai package: pip install 'openai>=1.0'", file=sys.stderr)
         sys.exit(1)
 
     client = OpenAI(base_url=args.base_url, api_key=args.api_key)
+    extra_body = {"reasoning_effort": args.reasoning_effort} if args.reasoning_effort else None
+    min_interval = 60.0 / args.rpm if args.rpm else 0.0
+
     predictions: list[PIIRecord] = []
     schema_valid = 0
-    total_latency = 0.0
+    latencies: list[float] = []
     errors = 0
+    last_start = 0.0
 
     for i, rec in enumerate(gold, 1):
         messages = build_messages(rec.text)
-        try:
-            t0 = time.monotonic()
-            resp = client.chat.completions.create(
-                model=args.model,
-                messages=messages,
-                max_tokens=args.max_tokens,
-                temperature=args.temperature,
-                timeout=args.timeout,
-            )
-            latency = time.monotonic() - t0
-            total_latency += latency
 
-            raw = resp.choices[0].message.content or ""
-            pred, valid = parse_response(rec.id, rec.text, raw, split=rec.split)
-            predictions.append(pred)
-            if valid:
-                schema_valid += 1
+        if min_interval:
+            wait = min_interval - (time.monotonic() - last_start)
+            if wait > 0:
+                time.sleep(wait)
 
-            n_spans = len(pred.spans) if pred else 0
-            status = "OK" if valid else "PARSE_FAIL"
-            print(f"  [{i}/{len(gold)}] {rec.id}: {status} ({n_spans} spans, {latency:.1f}s)")
+        pred = None
+        for attempt in range(1, args.max_retries + 1):
+            last_start = time.monotonic()
+            try:
+                t0 = time.monotonic()
+                resp = client.chat.completions.create(
+                    model=args.model,
+                    messages=messages,
+                    max_tokens=args.max_tokens,
+                    temperature=args.temperature,
+                    timeout=args.timeout,
+                    extra_body=extra_body,
+                )
+                latency = time.monotonic() - t0
+                latencies.append(latency)
 
-        except Exception as e:  # noqa: BLE001
+                raw = resp.choices[0].message.content or ""
+                pred, valid = parse_response(rec.id, rec.text, raw, split=rec.split)
+                if valid:
+                    schema_valid += 1
+
+                n_spans = len(pred.spans) if pred else 0
+                status = "OK" if valid else "PARSE_FAIL"
+                print(f"  [{i}/{len(gold)}] {rec.id}: {status} ({n_spans} spans, {latency:.1f}s)")
+                break
+
+            except (openai.RateLimitError, openai.APIConnectionError, openai.InternalServerError) as e:
+                if attempt == args.max_retries:
+                    print(f"  [{i}/{len(gold)}] {rec.id}: GAVE UP after {attempt} attempts ({type(e).__name__})")
+                    break
+                backoff = min(15.0 * (2 ** (attempt - 1)), 120.0)
+                print(f"  [{i}/{len(gold)}] {rec.id}: {type(e).__name__}, retry {attempt}/{args.max_retries} in {backoff:.0f}s")
+                time.sleep(backoff)
+            except Exception as e:  # noqa: BLE001
+                print(f"  [{i}/{len(gold)}] {rec.id}: ERROR ({type(e).__name__}: {e})")
+                break
+
+        if pred is None:
             errors += 1
-            predictions.append(PIIRecord(id=rec.id, text=rec.text, spans=[], split=rec.split))
-            print(f"  [{i}/{len(gold)}] {rec.id}: ERROR ({e})")
+            pred = PIIRecord(id=rec.id, text=rec.text, spans=[], split=rec.split)
+        predictions.append(pred)
 
-    return predictions, schema_valid, total_latency, errors
+    return predictions, schema_valid, latencies, errors
 
 
 def run_local(args, gold: list[PIIRecord]):
@@ -110,7 +142,7 @@ def run_local(args, gold: list[PIIRecord]):
 
     predictions: list[PIIRecord] = []
     schema_valid = 0
-    total_latency = 0.0
+    latencies: list[float] = []
     errors = 0
 
     for i, rec in enumerate(gold, 1):
@@ -134,7 +166,7 @@ def run_local(args, gold: list[PIIRecord]):
                 )
             raw = tokenizer.decode(outputs[0][input_ids.shape[-1]:], skip_special_tokens=True)
             latency = time.monotonic() - t0
-            total_latency += latency
+            latencies.append(latency)
 
             pred, valid = parse_response(rec.id, rec.text, raw, split=rec.split)
             predictions.append(pred)
@@ -150,7 +182,7 @@ def run_local(args, gold: list[PIIRecord]):
             predictions.append(PIIRecord(id=rec.id, text=rec.text, spans=[], split=rec.split))
             print(f"  [{i}/{len(gold)}] {rec.id}: ERROR ({type(e).__name__}: {e})")
 
-    return predictions, schema_valid, total_latency, errors
+    return predictions, schema_valid, latencies, errors
 
 
 def main() -> int:
@@ -160,12 +192,32 @@ def main() -> int:
     ap.add_argument("--model", required=True, help="Model name/path (HF name or local path)")
     ap.add_argument("--adapter", type=Path, default=None, help="LoRA adapter path (enables local inference)")
     ap.add_argument("--base-url", default="http://localhost:8000/v1", help="API base URL")
-    ap.add_argument("--api-key", default="not-needed", help="API key")
+    ap.add_argument("--api-key", default="not-needed", help="API key (prefer --api-key-env)")
+    ap.add_argument(
+        "--api-key-env", default=None, metavar="VAR",
+        help="Read the API key from this environment variable (never logged)",
+    )
     ap.add_argument("--max-tokens", type=int, default=1024, help="Max output tokens")
     ap.add_argument("--temperature", type=float, default=0.0, help="Sampling temperature")
     ap.add_argument("--timeout", type=float, default=60.0, help="Per-request timeout (seconds)")
     ap.add_argument("--limit", type=int, default=None, help="Process only first N records")
+    ap.add_argument(
+        "--rpm", type=float, default=None,
+        help="Throttle: max requests per minute (e.g. 5 for Cerebras free tier)",
+    )
+    ap.add_argument("--max-retries", type=int, default=5, help="Retries on rate-limit/transient errors")
+    ap.add_argument(
+        "--reasoning-effort", default=None, choices=["low", "medium", "high"],
+        help="For reasoning models (gpt-oss): passed as extra_body",
+    )
     args = ap.parse_args()
+
+    if args.api_key_env:
+        key = os.environ.get(args.api_key_env)
+        if not key:
+            print(f"Environment variable {args.api_key_env} is not set.", file=sys.stderr)
+            return 1
+        args.api_key = key
 
     gold = load_gold_texts(args.gold)
     if args.limit:
@@ -173,23 +225,35 @@ def main() -> int:
 
     if args.adapter:
         print(f"local inference: {args.model} + adapter {args.adapter}")
-        predictions, schema_valid, total_latency, errors = run_local(args, gold)
+        predictions, schema_valid, latencies, errors = run_local(args, gold)
     else:
         print(f"API inference: {args.model} via {args.base_url}")
-        predictions, schema_valid, total_latency, errors = run_api(args, gold)
+        predictions, schema_valid, latencies, errors = run_api(args, gold)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("w", encoding="utf-8") as f:
         for p in predictions:
             f.write(p.model_dump_json() + "\n")
 
+    def pct(sorted_vals: list[float], q: float) -> float:
+        if not sorted_vals:
+            return 0.0
+        idx = round(q * (len(sorted_vals) - 1))
+        return sorted_vals[idx]
+
+    lat_sorted = sorted(latencies)
     meta = {
         "schema_valid": schema_valid,
         "total": len(gold),
         "errors": errors,
-        "avg_latency_s": total_latency / len(gold) if gold else 0,
+        "avg_latency_s": sum(latencies) / len(latencies) if latencies else 0,
+        "p50_latency_s": pct(lat_sorted, 0.50),
+        "p95_latency_s": pct(lat_sorted, 0.95),
         "model": args.model,
         "adapter": str(args.adapter) if args.adapter else None,
+        "base_url": None if args.adapter else args.base_url,
+        "reasoning_effort": args.reasoning_effort,
+        "rpm_throttle": args.rpm,
     }
     meta_path = args.output.with_suffix(".meta.json")
     meta_path.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
@@ -198,7 +262,7 @@ def main() -> int:
     print(f"\nwrote {len(predictions)} predictions -> {args.output}")
     print(f"schema valid: {schema_valid}/{len(gold)} ({valid_pct:.1f}%)")
     print(f"errors: {errors}")
-    print(f"avg latency: {meta['avg_latency_s']:.2f}s")
+    print(f"avg latency: {meta['avg_latency_s']:.2f}s | p50: {meta['p50_latency_s']:.2f}s | p95: {meta['p95_latency_s']:.2f}s")
 
     return 0
 
