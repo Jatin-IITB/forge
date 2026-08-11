@@ -31,6 +31,12 @@ runs/
 data/generated/
 data/synthetic/
 data/cache/
+data/train*.jsonl
+data/targeted_train*.jsonl
+data/predictions_*.jsonl
+data/*.meta.json
+data/error_analysis_*.json
+data/seeds/
 *.log.jsonl
 !data/gold/
 
