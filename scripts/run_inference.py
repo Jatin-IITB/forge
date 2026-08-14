@@ -38,12 +38,14 @@ def load_gold_texts(path: Path) -> list[PIIRecord]:
     return records
 
 
-def run_api(args, gold: list[PIIRecord]):
+def run_api(args, gold: list[PIIRecord], sink=None):
     """Run inference via an OpenAI-compatible API.
 
     Transport robustness (throttle, retry) lives here; scoring semantics —
     prompts, parsing, metrics — are unchanged. Recorded latency is the
     successful attempt's server round-trip only, never throttle sleeps.
+    Each prediction is flushed to `sink` immediately so an interrupted run
+    loses nothing already processed (restart with --resume).
     """
     try:
         import openai
@@ -111,11 +113,14 @@ def run_api(args, gold: list[PIIRecord]):
             errors += 1
             pred = PIIRecord(id=rec.id, text=rec.text, spans=[], split=rec.split)
         predictions.append(pred)
+        if sink is not None:
+            sink.write(pred.model_dump_json() + "\n")
+            sink.flush()
 
     return predictions, schema_valid, latencies, errors
 
 
-def run_local(args, gold: list[PIIRecord]):
+def run_local(args, gold: list[PIIRecord], sink=None):
     """Run inference with a local model (base + optional LoRA adapter)."""
     import torch
     from peft import PeftModel
@@ -179,8 +184,13 @@ def run_local(args, gold: list[PIIRecord]):
 
         except Exception as e:  # noqa: BLE001
             errors += 1
-            predictions.append(PIIRecord(id=rec.id, text=rec.text, spans=[], split=rec.split))
+            pred = PIIRecord(id=rec.id, text=rec.text, spans=[], split=rec.split)
+            predictions.append(pred)
             print(f"  [{i}/{len(gold)}] {rec.id}: ERROR ({type(e).__name__}: {e})")
+
+        if sink is not None:
+            sink.write(predictions[-1].model_dump_json() + "\n")
+            sink.flush()
 
     return predictions, schema_valid, latencies, errors
 
@@ -210,6 +220,10 @@ def main() -> int:
         "--reasoning-effort", default=None, choices=["low", "medium", "high"],
         help="For reasoning models (gpt-oss): passed as extra_body",
     )
+    ap.add_argument(
+        "--resume", action="store_true",
+        help="Skip records whose ids are already in the output file; append to it",
+    )
     args = ap.parse_args()
 
     if args.api_key_env:
@@ -223,17 +237,23 @@ def main() -> int:
     if args.limit:
         gold = gold[: args.limit]
 
-    if args.adapter:
-        print(f"local inference: {args.model} + adapter {args.adapter}")
-        predictions, schema_valid, latencies, errors = run_local(args, gold)
-    else:
-        print(f"API inference: {args.model} via {args.base_url}")
-        predictions, schema_valid, latencies, errors = run_api(args, gold)
+    done_ids: set[str] = set()
+    if args.resume and args.output.exists():
+        for line in args.output.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                done_ids.add(PIIRecord.model_validate_json(line).id)
+        gold = [r for r in gold if r.id not in done_ids]
+        print(f"resume: {len(done_ids)} records already done, {len(gold)} remaining")
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    with args.output.open("w", encoding="utf-8") as f:
-        for p in predictions:
-            f.write(p.model_dump_json() + "\n")
+    mode = "a" if (args.resume and done_ids) else "w"
+    with args.output.open(mode, encoding="utf-8") as sink:
+        if args.adapter:
+            print(f"local inference: {args.model} + adapter {args.adapter}")
+            predictions, schema_valid, latencies, errors = run_local(args, gold, sink=sink)
+        else:
+            print(f"API inference: {args.model} via {args.base_url}")
+            predictions, schema_valid, latencies, errors = run_api(args, gold, sink=sink)
 
     def pct(sorted_vals: list[float], q: float) -> float:
         if not sorted_vals:
@@ -245,6 +265,7 @@ def main() -> int:
     meta = {
         "schema_valid": schema_valid,
         "total": len(gold),
+        "resumed_skipped": len(done_ids),
         "errors": errors,
         "avg_latency_s": sum(latencies) / len(latencies) if latencies else 0,
         "p50_latency_s": pct(lat_sorted, 0.50),

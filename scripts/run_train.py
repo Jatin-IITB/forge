@@ -66,6 +66,10 @@ def main() -> int:
     ap.add_argument("--qlora", action="store_true", help="Use 4-bit QLoRA")
     ap.add_argument("--seed", type=int, default=SFT_DEFAULTS["seed"])
     ap.add_argument("--resume", action="store_true", help="Resume from latest checkpoint")
+    ap.add_argument(
+        "--save-steps", type=int, default=None,
+        help="Checkpoint every N steps instead of per epoch (bounds lost work on interruption)",
+    )
     args = ap.parse_args()
 
     print(f"loading training data from {args.train_data}")
@@ -140,7 +144,9 @@ def main() -> int:
         warmup_ratio=SFT_DEFAULTS["warmup_ratio"],
         lr_scheduler_type=SFT_DEFAULTS["lr_scheduler_type"],
         logging_steps=SFT_DEFAULTS["logging_steps"],
-        save_strategy=SFT_DEFAULTS["save_strategy"],
+        save_strategy="steps" if args.save_steps else SFT_DEFAULTS["save_strategy"],
+        save_steps=args.save_steps if args.save_steps else 500,
+        save_total_limit=3,
         bf16=use_bf16,
         fp16=use_fp16,
         seed=args.seed,
@@ -158,7 +164,10 @@ def main() -> int:
 
     resume_from = None
     if args.resume and args.output_dir.exists():
-        checkpoints = sorted(args.output_dir.glob("checkpoint-*"))
+        checkpoints = sorted(
+            args.output_dir.glob("checkpoint-*"),
+            key=lambda p: int(p.name.split("-")[-1]),
+        )
         if checkpoints:
             resume_from = str(checkpoints[-1])
             print(f"resuming from {resume_from}")
