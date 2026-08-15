@@ -50,3 +50,5 @@ logs/
 
 # Private working docs (aspirational drafts — must not ship publicly)
 RESUME_BRIEF.md
+data/ood_probe.jsonl
+data/ood_results_*.json
