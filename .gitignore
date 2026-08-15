@@ -44,3 +44,6 @@ data/seeds/
 .DS_Store
 .idea/
 .vscode/
+
+# Long-run job logs
+logs/
