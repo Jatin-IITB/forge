@@ -63,6 +63,8 @@ def run_api(args, gold: list[PIIRecord], sink=None):
     latencies: list[float] = []
     errors = 0
     last_start = 0.0
+    tokens_in = 0
+    tokens_out = 0
 
     for i, rec in enumerate(gold, 1):
         messages = build_messages(rec.text)
@@ -87,6 +89,12 @@ def run_api(args, gold: list[PIIRecord], sink=None):
                 )
                 latency = time.monotonic() - t0
                 latencies.append(latency)
+
+                # Token usage drives the G3 cost model (scripts/run_economics.py).
+                usage = getattr(resp, "usage", None)
+                if usage:
+                    tokens_in += getattr(usage, "prompt_tokens", 0) or 0
+                    tokens_out += getattr(usage, "completion_tokens", 0) or 0
 
                 raw = resp.choices[0].message.content or ""
                 pred, valid = parse_response(rec.id, rec.text, raw, split=rec.split)
@@ -117,7 +125,7 @@ def run_api(args, gold: list[PIIRecord], sink=None):
             sink.write(pred.model_dump_json() + "\n")
             sink.flush()
 
-    return predictions, schema_valid, latencies, errors
+    return predictions, schema_valid, latencies, errors, (tokens_in, tokens_out)
 
 
 def run_local(args, gold: list[PIIRecord], sink=None):
@@ -192,7 +200,7 @@ def run_local(args, gold: list[PIIRecord], sink=None):
             sink.write(predictions[-1].model_dump_json() + "\n")
             sink.flush()
 
-    return predictions, schema_valid, latencies, errors
+    return predictions, schema_valid, latencies, errors, (None, None)
 
 
 def main() -> int:
@@ -250,10 +258,10 @@ def main() -> int:
     with args.output.open(mode, encoding="utf-8") as sink:
         if args.adapter:
             print(f"local inference: {args.model} + adapter {args.adapter}")
-            predictions, schema_valid, latencies, errors = run_local(args, gold, sink=sink)
+            predictions, schema_valid, latencies, errors, tokens = run_local(args, gold, sink=sink)
         else:
             print(f"API inference: {args.model} via {args.base_url}")
-            predictions, schema_valid, latencies, errors = run_api(args, gold, sink=sink)
+            predictions, schema_valid, latencies, errors, tokens = run_api(args, gold, sink=sink)
 
     def pct(sorted_vals: list[float], q: float) -> float:
         if not sorted_vals:
@@ -261,27 +269,53 @@ def main() -> int:
         idx = round(q * (len(sorted_vals) - 1))
         return sorted_vals[idx]
 
-    lat_sorted = sorted(latencies)
+    meta_path = args.output.with_suffix(".meta.json")
+
+    # A resumed run only measured the tail. Fold in the earlier segment's counts
+    # so the meta describes the whole prediction file, and pool the latency
+    # samples so p95 is not computed from a truncated slice.
+    prior_lat: list[float] = []
+    if args.resume and done_ids and meta_path.exists():
+        try:
+            prior = json.loads(meta_path.read_text(encoding="utf-8"))
+            schema_valid += prior.get("schema_valid", 0)
+            errors += prior.get("errors", 0)
+            if tokens[0] is not None:
+                tokens = (
+                    tokens[0] + (prior.get("total_tokens_in") or 0),
+                    tokens[1] + (prior.get("total_tokens_out") or 0),
+                )
+            prior_lat = prior.get("latencies_s", [])
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"warning: prior meta unmergeable ({e}); reporting tail only", file=sys.stderr)
+
+    all_lat = prior_lat + latencies
+    lat_sorted = sorted(all_lat)
+    total = len(done_ids) + len(gold)
     meta = {
         "schema_valid": schema_valid,
-        "total": len(gold),
+        "total": total,
         "resumed_skipped": len(done_ids),
         "errors": errors,
-        "avg_latency_s": sum(latencies) / len(latencies) if latencies else 0,
+        "avg_latency_s": sum(all_lat) / len(all_lat) if all_lat else 0,
         "p50_latency_s": pct(lat_sorted, 0.50),
         "p95_latency_s": pct(lat_sorted, 0.95),
+        "total_tokens_in": tokens[0],
+        "total_tokens_out": tokens[1],
         "model": args.model,
         "adapter": str(args.adapter) if args.adapter else None,
         "base_url": None if args.adapter else args.base_url,
         "reasoning_effort": args.reasoning_effort,
         "rpm_throttle": args.rpm,
+        # Kept so a later resume pools percentiles instead of recomputing them
+        # from whatever tail happened to run last.
+        "latencies_s": [round(x, 4) for x in all_lat],
     }
-    meta_path = args.output.with_suffix(".meta.json")
     meta_path.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
 
-    valid_pct = schema_valid / len(gold) * 100 if gold else 0
+    valid_pct = schema_valid / total * 100 if total else 0
     print(f"\nwrote {len(predictions)} predictions -> {args.output}")
-    print(f"schema valid: {schema_valid}/{len(gold)} ({valid_pct:.1f}%)")
+    print(f"schema valid: {schema_valid}/{total} ({valid_pct:.1f}%)")
     print(f"errors: {errors}")
     print(f"avg latency: {meta['avg_latency_s']:.2f}s | p50: {meta['p50_latency_s']:.2f}s | p95: {meta['p95_latency_s']:.2f}s")
 

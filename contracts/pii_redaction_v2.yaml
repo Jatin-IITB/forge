@@ -1,0 +1,126 @@
+# Forge TaskContract — On-device PII detection & redaction (v2)
+# ---------------------------------------------------------------------------
+# THIS FILE IS IMMUTABLE FOR A TRAINING RUN (DESIGN §1, ADR 0001).
+# Changing a gate, the metric, or the teacher = a NEW contract version, never an edit.
+# Validated by `forge.contracts.load_contract` (run `make validate`).
+#
+# v2 supersedes v1 for one reason ONLY: the teacher changed from
+# Qwen2.5-32B-Instruct to openai/gpt-oss-120b (ADR 0010), after the 8B
+# development teacher proved too weak and no free host served Qwen3-32B.
+# EVERY GATE THRESHOLD IS BYTE-IDENTICAL TO v1. The bar was not moved; the
+# denominator got harder. v1 stays in the repo as the historical record.
+# ---------------------------------------------------------------------------
+
+task_id: pii_redaction_v2
+version: "2.0.0"
+supersedes: pii_redaction_v1
+change_reason: >-
+  Teacher scale-up only (ADR 0010). Gates, metric, taxonomy, and data policy
+  unchanged from v1. Committed before any v2 run was scored, so no threshold
+  could be tuned to a result.
+description: >-
+  Detect and redact personally-identifiable information in short English text,
+  fully on-device. Sending sensitive text to a frontier API to find sensitive
+  text defeats the purpose, so a local specialist is the only privacy-compliant
+  option (GDPR; India DPDP Act 2023). The student must match the teacher's
+  entity-level F1 within tolerance at a fraction of the cost/latency.
+
+io_schema:
+  input: "Free-text string (<= 512 tokens), English, single document/message."
+  output: >-
+    JSON: a list of PII spans (character offsets [start,end), entity label from
+    the fixed taxonomy, surface text) over the input. Redaction is derived by
+    replacing each span with [LABEL].
+  schema_module: forge.schema   # PIIRecord / PIISpan / PIIType define the output
+
+metric:
+  primary: "micro-F1 over (start, end, label) exact-match spans"
+  secondary:
+    - "per-type precision / recall / F1"
+    - "partial-overlap F1 (diagnostic)"
+    - "redaction leak rate = fraction of gold PII chars left unmasked"
+    - "schema-validity rate"
+    - "p95 latency (ms)"
+    - "cost per 1k requests (USD)"
+  span_match: exact
+
+# The six pre-committed gates (DESIGN §3, SUCCESS.md). All measured with 95% CIs.
+gates:
+  parity_target: 0.98          # student_F1 >= 0.98 * teacher_F1
+  schema_validity_min: 0.999
+  cost_ratio_max: 0.10         # student $/1k <= teacher/10
+  p95_ratio_max: 0.20          # student p95 <= teacher/5
+  ood_refusal_min: 0.90
+  # Missing a high-severity identifier is a reportable breach, not a metric blip.
+  # Recall on these is gated HARDER than overall parity.
+  high_severity_recall_floors:
+    - { label: CREDIT_CARD,   min_recall: 0.99 }
+    - { label: BANK_ACCOUNT,  min_recall: 0.99 }
+    - { label: SSN,           min_recall: 0.99 }
+    - { label: AADHAAR,       min_recall: 0.99 }
+    - { label: PAN,           min_recall: 0.99 }
+    - { label: PASSPORT,       min_recall: 0.99 }
+    - { label: DRIVER_LICENSE, min_recall: 0.99 }
+    - { label: PASSWORD,       min_recall: 0.99 }
+    - { label: API_KEY,        min_recall: 0.99 }
+
+# Teacher: open-weight, Apache-2.0 (no distillation restriction). See ADR 0005, 0010.
+teacher:
+  name: "openai/gpt-oss-120b"
+  served_as: "gpt-oss-120b"
+  license: "Apache-2.0"
+  open_weight: true
+  distillation_permitted: true
+  architecture: "MoE — ~117B total parameters, ~5.1B active per token"
+  endpoint: "https://api.cerebras.ai/v1"   # provider is fungible; see notes
+  reasoning_effort: low
+  notes: >-
+    Apache-2.0 open weights. The hosted endpoint is a convenience, not a
+    dependency: the same checkpoint is served by Cerebras and Groq and is
+    self-hostable with vLLM on a rented GPU, so a stranger can rebuild against
+    any of the three (ADR 0003 litmus passes). Compression claims MUST state
+    both ratios — ~78x total-parameter and ~3.4x active-parameter — because the
+    teacher is sparse and quoting only the headline would mislead. The 8B
+    development teacher (qwen3:8b via local Ollama) is retained in reports as
+    history, never as the parity denominator.
+
+# Base student: open-weight, Apache-2.0, fits the on-device target.
+base_model:
+  name: "Qwen/Qwen2.5-1.5B-Instruct"
+  license: "Apache-2.0"
+  open_weight: true
+  distillation_permitted: true
+  notes: >-
+    Apache-2.0. Larger option Qwen2.5-3B-Instruct (relicensed to Apache-2.0).
+    Fallback: meta-llama/Llama-3.2-1B/3B-Instruct.
+
+constraints:
+  max_params_b: 3.0
+  target_hardware: "single 24GB GPU for training; CPU / Apple-silicon laptop for inference"
+  privacy: "on-device / air-gapped — no input ever leaves the machine"
+
+guardrails:
+  in_domain: >-
+    Natural-language English text up to ~512 tokens (emails, chat messages,
+    support tickets, form free-text). Single document per request.
+  ood_behavior: >-
+    For inputs outside the in-domain definition (other languages, code, binary,
+    >512 tokens), return an empty span list with an explicit
+    {"status":"out_of_domain"} flag rather than hallucinating spans.
+
+data:
+  gold_source: >-
+    Self-generated synthetic — Faker (MIT) injects fake PII values into templated
+    and public-domain carrier text; a human-verified subset is frozen as dev/test.
+    Fully reproducible from a fixed seed via `make gold`.
+  gold_license: "MIT (Faker) + project-owned synthetic text — fully redistributable"
+  rejected_sources:
+    - >-
+      ai4privacy/pii-masking-200k — academic-use only; commercial use gated behind
+      licensing@ai4privacy.com. Conflicts with ADR 0003 (a stranger must be able to
+      rebuild end-to-end). Permitted ONLY as an external academic benchmark, never
+      as the committed gold/training asset.
+  leakage_policy: >-
+    Frozen test split is never used for training or prompt-tuning. Near-duplicate
+    detection runs between train and {dev,test}; any train example overlapping a
+    test carrier sentence is dropped. Leakage count must be 0 in the data card.
