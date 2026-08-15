@@ -1,5 +1,6 @@
 """Gold set builder: reproducibility, coverage, and schema conformance."""
 
+import datetime as dt
 import subprocess
 import sys
 import tempfile
@@ -110,3 +111,59 @@ def test_reproducibility() -> None:
 
     assert committed_test == fresh_test, "test.jsonl is not reproducible"
     assert committed_dev == fresh_dev, "dev.jsonl is not reproducible"
+
+
+def test_gold_is_not_clock_dependent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Generated PII values must not change when the system clock moves.
+
+    Regression guard for ADR 0011: `date_of_birth()` samples a window derived
+    from `datetime.now()`, so the original builder was reproducible *within a
+    day* and silently different across days — it passed every test on the day
+    it was written and drifted +1 day per day thereafter. Only a clock-shifted
+    run catches that class of defect.
+    """
+    sys.path.insert(0, str(BUILD_SCRIPT.parent.parent))
+    import faker.providers.date_time as faker_dt
+
+    from scripts.build_gold import SEED, PIIValueGenerator
+
+    real_date, real_datetime = dt.date, dt.datetime
+
+    def values_for(today: dt.date) -> list[str]:
+        # Both clocks must move together. Faker reads `datetime.now()` through
+        # its own module-level binding (so patching the stdlib module alone
+        # would not reach it), while our epoch correction reads `date.today()`.
+        # Shifting only one makes the test fail for the wrong reason.
+        shift = today - real_date.today()
+
+        class FrozenDate(real_date):
+            @classmethod
+            def today(cls) -> dt.date:
+                return today
+
+        class FrozenDateTime(real_datetime):
+            @classmethod
+            def now(cls, tz=None) -> dt.datetime:
+                return real_datetime.now(tz) + shift
+
+        monkeypatch.setattr(dt, "date", FrozenDate)
+        monkeypatch.setattr(faker_dt, "datetime", FrozenDateTime)
+        try:
+            gen = PIIValueGenerator(SEED)
+            # Every generator, not just DOB — any of them could read the clock.
+            return [gen.gen(t) for t in PIIType for _ in range(3)]
+        finally:
+            monkeypatch.undo()
+
+    baseline = values_for(dt.date(2026, 8, 15))
+    one_year_later = values_for(dt.date(2027, 8, 15))
+    one_day_later = values_for(dt.date(2026, 8, 16))
+
+    assert baseline == one_day_later, (
+        "generated values changed after one day — a generator reads the wall "
+        "clock instead of a fixed epoch (see ADR 0011)"
+    )
+    assert baseline == one_year_later, (
+        "generated values changed after one year — a generator reads the wall "
+        "clock instead of a fixed epoch (see ADR 0011)"
+    )

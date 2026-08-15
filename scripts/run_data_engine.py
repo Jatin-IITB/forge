@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -63,6 +64,7 @@ def query_teacher(
     max_tokens: int,
     temperature: float,
     timeout: float,
+    reasoning_effort: str | None = None,
 ) -> tuple[PIIRecord | None, bool, dict]:
     """Query the teacher once and parse the response.
 
@@ -76,6 +78,7 @@ def query_teacher(
         max_tokens=max_tokens,
         temperature=temperature,
         timeout=timeout,
+        extra_body={"reasoning_effort": reasoning_effort} if reasoning_effort else None,
     )
     msg = resp.choices[0].message
     raw = msg.content or ""
@@ -104,7 +107,26 @@ def main() -> int:
     ap.add_argument("--dedup-threshold", type=float, default=0.85, help="Jaccard threshold for near-dedup")
     ap.add_argument("--limit", type=int, default=None, help="Process only first N seed texts")
     ap.add_argument("--resume", action="store_true", help="Resume from existing output, skip already-processed seeds")
+    ap.add_argument(
+        "--api-key-env", default=None, metavar="VAR",
+        help="Read the API key from this environment variable (never logged)",
+    )
+    ap.add_argument(
+        "--rpm", type=float, default=None,
+        help="Throttle: max requests per minute (free tiers cap this)",
+    )
+    ap.add_argument(
+        "--reasoning-effort", default=None, choices=["low", "medium", "high"],
+        help="For reasoning teachers (gpt-oss): passed as extra_body",
+    )
     args = ap.parse_args()
+
+    if args.api_key_env:
+        key = os.environ.get(args.api_key_env)
+        if not key:
+            print(f"Environment variable {args.api_key_env} is not set.", file=sys.stderr)
+            return 1
+        args.api_key = key
 
     seeds = load_seed_texts(args.seed_texts)
     if args.limit:
@@ -136,6 +158,11 @@ def main() -> int:
     print(f"teacher log: {log_path}")
     print()
 
+    # Free-tier teachers cap requests per minute; k samples per seed multiplies
+    # the call count, so the throttle is enforced per call, not per seed.
+    min_interval = 60.0 / args.rpm if args.rpm else 0.0
+    last_call = 0.0
+
     for i, (seed_id, text) in enumerate(seeds_to_process, len(resumed_records) + 1):
         samples = []
         valid_flags = []
@@ -144,10 +171,16 @@ def main() -> int:
 
         for sample_j in range(args.k):
             try:
+                if min_interval:
+                    wait = min_interval - (time.monotonic() - last_call)
+                    if wait > 0:
+                        time.sleep(wait)
+                last_call = time.monotonic()
                 t0 = time.monotonic()
                 rec, valid, trace = query_teacher(
                     client, text, args.model,
                     args.max_tokens, args.temperature, args.timeout,
+                    reasoning_effort=args.reasoning_effort,
                 )
                 trace["latency_s"] = round(time.monotonic() - t0, 2)
                 total_latency += trace["latency_s"]

@@ -16,6 +16,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import datetime
 import random
 import string
 from collections import Counter
@@ -31,6 +32,12 @@ from forge.schema import HIGH_SEVERITY, PIIRecord, PIISpan, PIIType
 SEED = 42
 TARGET_TOTAL = 600
 DEV_FRACTION = 0.33
+
+# Fixed reference date for date-of-birth generation. MUST NOT be `today`:
+# a frozen gold set has to depend on the seed and nothing else, and anything
+# clock-relative makes the "reproducible from a fixed seed" claim false.
+# Value is the date the gold set was originally built.
+DOB_EPOCH = datetime.date(2026, 8, 7)
 
 Segment = str | tuple[str, PIIType]
 RawTemplate = list[str | PIIType]
@@ -112,7 +119,20 @@ class PIIValueGenerator:
         return self._pick_faker().city().replace("\n", " ")
 
     def _dob(self) -> str:
+        # Faker's date_of_birth() derives its range from *today*, so the same
+        # seed yields a different date tomorrow — which silently falsified the
+        # frozen gold set's "reproducible from a fixed seed" guarantee (found
+        # as an exact 8-day skew, 8 days after the set was built).
+        #
+        # The sampling window slides with the clock, so the result shifts by
+        # exactly (today - DOB_EPOCH) days. Keep Faker's own call — swapping in
+        # date_between_dates would consume the RNG differently and change every
+        # downstream value — then subtract the drift. This reproduces the
+        # originally committed gold set bit-for-bit on any future date.
         d = self.fake_us.date_of_birth(minimum_age=18, maximum_age=80)
+        # DTZ011: today() is read here *to cancel* Faker's own clock dependence,
+        # which is the opposite of the risk the rule guards against.
+        d -= datetime.date.today() - DOB_EPOCH  # noqa: DTZ011
         fmt = self.rng.choice(["%Y-%m-%d", "%d/%m/%Y", "%B %d, %Y", "%d %b %Y"])
         return d.strftime(fmt)
 

@@ -22,16 +22,15 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import json
 import random
 import sys
 from collections import Counter
 from pathlib import Path
 
+from forge.schema import HIGH_SEVERITY, PIIRecord, PIIType
+
 # Reuse the gold set builder's infrastructure
 from scripts.build_gold import PIIValueGenerator, build_record, expand_template, print_stats
-
-from forge.schema import HIGH_SEVERITY, PIIRecord, PIIType
 
 P = PIIType
 
@@ -285,7 +284,7 @@ def main() -> int:
         for s in r.spans:
             type_counts[s.label.value] += 1
 
-    print(f"\nSpan distribution:")
+    print("\nSpan distribution:")
     for t in PIIType:
         c = type_counts.get(t.value, 0)
         if c > 0:

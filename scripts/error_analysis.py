@@ -22,7 +22,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-from forge.eval import EvalReport, SpanKey, _span_key, evaluate
+from forge.eval import EvalReport, _span_key, evaluate
 from forge.schema import HIGH_SEVERITY, PIIRecord, PIIType
 
 
@@ -182,7 +182,7 @@ def main() -> int:
         print(f"\nwrote report -> {args.output}", file=sys.stderr)
 
     print(f"\n{'='*60}", file=sys.stderr)
-    print(f"  AUGMENTATION TARGETS (Phase 4)", file=sys.stderr)
+    print("  AUGMENTATION TARGETS (Phase 4)", file=sys.stderr)
     print(f"{'='*60}", file=sys.stderr)
     print(f"  {'Type':<20} {'Need':>5} {'Recall':>8} {'Target':>8} {'Priority':<10}", file=sys.stderr)
     print(f"  {'-'*55}", file=sys.stderr)
