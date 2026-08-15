@@ -27,16 +27,16 @@ Every public claim about this project maps to a number this repo produces. Two r
 
 ## The claim ledger
 
-Every bullet on the resume, against the repo, as of 2026-08-11:
+Every bullet on the resume, against the repo, as of **2026-08-15**:
 
 | # | Claim | Status | Evidence / gap |
 |---|-------|--------|----------------|
-| 1 | Distilled **120B→1.5B** *(amended up from 32B, 2026-08-11)* | 🟡 in progress | Final teacher: GPT-OSS-120B (Apache-2.0, MoE 117B/5.1B active) on Cerebras free tier → ADR 0010. Dev teacher was Qwen3-8B. Honest writeup states both compression ratios (≈78× total-param, ≈3.4× active). |
+| 1 | Distilled **120B→1.5B** *(amended up from 32B, 2026-08-11)* | 🟡 in progress | Final teacher: GPT-OSS-120B (Apache-2.0, MoE 117B/5.1B active) on Cerebras free tier → ADR 0010, contract v2. Wired and scoring the frozen test set (2026-08-15). Dev teacher was Qwen3-8B. Honest writeup states both compression ratios (≈78× total-param, ≈3.4× active). |
 | 2 | On-device PII specialist | 🟡 partial | Student is Qwen2.5-1.5B, trains + runs locally. "On-device" fully earned when GGUF artifact passes gates (Arc C). |
-| 3 | ~80× lower cost | ❌ unmeasured | Needs economics harness + published cost model (Arc D). Claim becomes the measured multiple. |
-| 4 | ~20× lower p95 | ❌ unmeasured | Teacher-API p95 vs student on-device p95, same harness (Arc D). Claim becomes the measured multiple. |
-| 5 | ≥0.98× teacher F1 parity | ❌ **the fight** | Gate G1 pre-committed at 0.98×. run_001 F1 = 0.52. Teacher not yet scored on frozen test. Arc A/B. |
-| 6 | 574-record frozen gold | ✅ true | 385 test + 189 dev = 574, frozen, protocol documented (`data/gold/PROTOCOL.md`). |
+| 3 | ~80× lower cost | 🟡 harness ready | `scripts/run_economics.py` measures G3 with the cost model published and the teacher priced at *paid* rates. Awaiting both runs. Claim becomes the measured multiple. |
+| 4 | ~20× lower p95 | 🟡 harness ready | p50/p95 now recorded per run (averages were being stored before — G4 needs percentiles). Awaiting both runs. |
+| 5 | ≥0.98× teacher F1 parity | ❌ **the fight** | Gate G1 pre-committed at 0.98×. run_001 F1 = 0.52. Teacher baseline in flight (2026-08-15). Arc A/B. |
+| 6 | 574-record frozen gold | ✅ true *(defect found + fixed 2026-08-15)* | 385 test + 189 dev = 574. **It was silently drifting** — a clock-dependent generator made it reproducible only within a single day (ADR 0011). Fixed so the committed data reproduces bit-for-bit; regression test verified to fail on the old code. Note: "human-verified" is **not** yet claimable (Protocol §5 pass never done). |
 | 7 | 6 gates | ✅ true | G1–G6 pre-committed in `SUCCESS.md`. |
 | 8 | 19 PII types | ✅ true | `forge/schema.py::PIIType`. |
 | 9 | High-severity recall ≥0.99 on 9 critical | 🟡 gate set | `HIGH_SEVERITY` frozenset + per-type gate wired into eval. Achievement pending (Arc A/B). |
@@ -44,11 +44,19 @@ Every bullet on the resume, against the repo, as of 2026-08-11:
 | 11 | 3-layer dedup | ✅ true | `forge/dedup.py`: exact / near-dup (n-gram Jaccard) / gold-leakage. |
 | 12 | Filtered unreliable teacher outputs | ✅ true | Verification gate with logged accept/reject (ADR 0002). |
 | 13 | Fine-tuned with LoRA | ✅ true | run_001, run_002 (PEFT LoRA on MPS). |
-| 14 | …& QLoRA | ❌ not run | One documented QLoRA run required (Arc C): MLX 4-bit local or brief rented GPU. |
+| 14 | …& QLoRA | ❌ **blocked on hardware** | bitsandbytes has no MPS backend; this Mac cannot run QLoRA. Needs a rented GPU (~$1) or the claim is dropped. Not "pending" — blocked, and the writeup must not imply otherwise. |
 | 15 | DPO when needed | 🟡 conditional | Decision gate after parity loop: if span-level FPs persist, build preference pairs and run DPO; either way, document the decision (ADR). |
-| 16 | Packaged AWQ | ❌ not run | AWQ needs CUDA → one short rented-GPU session (Arc C). |
-| 17 | Packaged GGUF | ❌ not run | llama.cpp convert + quantize, fully local (Arc C). Quantized artifact must re-pass all gates. |
+| 16 | Packaged AWQ | ❌ **blocked on hardware** | AWQ calibration needs CUDA kernels. `export_model.py awq` refuses with an explanation rather than silently skipping. Same rented-GPU session as row 14. |
+| 17 | Packaged GGUF | 🟡 code ready | `export_model.py gguf` implemented (merge → f16 → Q4_K_M/Q8_0), runs fully on Mac. Blocked only on a trained adapter. Quantized artifact must re-pass all gates before this flips ✅. |
 | 18 | Offline private inference | ❌ pending | The airplane-mode demo: GGUF via llama.cpp/Ollama, Wi-Fi off (Arc C/E). |
+
+### Infrastructure claims (added 2026-08-15)
+
+| Claim | Status | Evidence |
+|---|---|---|
+| One-command rebuild (`make forge`) | 🟡 wired, unproven end-to-end | Full chain in the Makefile, teacher-first ordering so parity can't be back-fitted. Not yet run start-to-finish on a clean clone. |
+| Reproducible from fixed seeds | ✅ true *(as of the ADR 0011 fix)* | 143 tests green including a clock-shift regression guard. |
+| Gates pre-committed, never moved | ✅ true | Teacher change forced contract **v2**; all six thresholds verified byte-identical to v1 rather than edited. |
 
 **Ledger discipline:** this table is updated (with dates) whenever a row changes state. A row
 flips to ✅ only on a committed, reproducible measurement — never on "it should work now."
