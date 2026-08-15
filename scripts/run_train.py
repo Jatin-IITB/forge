@@ -63,6 +63,15 @@ def main() -> int:
     ap.add_argument("--max-seq-length", type=int, default=SFT_DEFAULTS["max_length"])
     ap.add_argument("--lora-r", type=int, default=LORA_DEFAULTS["r"])
     ap.add_argument("--lora-alpha", type=int, default=LORA_DEFAULTS["lora_alpha"])
+    ap.add_argument(
+        "--lora-target-mlp", action="store_true",
+        help=(
+            "Also adapt the MLP blocks (gate/up/down_proj), not just attention. "
+            "The MLP holds most of a transformer's parameters; attention-only "
+            "LoRA was the untested variable behind run_002's loss plateau "
+            "(ADR 0013)."
+        ),
+    )
     ap.add_argument("--qlora", action="store_true", help="Use 4-bit QLoRA")
     ap.add_argument("--seed", type=int, default=SFT_DEFAULTS["seed"])
     ap.add_argument("--resume", action="store_true", help="Resume from latest checkpoint")
@@ -118,11 +127,16 @@ def main() -> int:
     if args.qlora:
         model = prepare_model_for_kbit_training(model)
 
+    target_modules = list(LORA_DEFAULTS["target_modules"])
+    if args.lora_target_mlp:
+        target_modules += ["gate_proj", "up_proj", "down_proj"]
+    print(f"LoRA: r={args.lora_r} alpha={args.lora_alpha} modules={target_modules}")
+
     lora_config = LoraConfig(
         r=args.lora_r,
         lora_alpha=args.lora_alpha,
         lora_dropout=LORA_DEFAULTS["lora_dropout"],
-        target_modules=LORA_DEFAULTS["target_modules"],
+        target_modules=target_modules,
         bias=LORA_DEFAULTS["bias"],
         task_type=LORA_DEFAULTS["task_type"],
     )
