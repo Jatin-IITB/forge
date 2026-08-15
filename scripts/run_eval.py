@@ -25,6 +25,7 @@ from pathlib import Path
 from forge.contracts import load_contract
 from forge.eval import evaluate
 from forge.schema import PIIRecord
+from forge.validators import find_high_severity, merge_with_model
 
 
 def load_records(path: Path) -> list[PIIRecord]:
@@ -94,6 +95,13 @@ def main() -> int:
         "--inference-meta", type=Path, default=None,
         help="Path to inference .meta.json (provides schema_valid_count for G2 gate)",
     )
+    ap.add_argument(
+        "--validators", action="store_true",
+        help=(
+            "Apply the deterministic high-severity validators (ADR 0012) and report "
+            "model-only, validator-only and system numbers together"
+        ),
+    )
     args = ap.parse_args()
 
     gold = load_records(args.gold)
@@ -118,6 +126,21 @@ def main() -> int:
 
     report = evaluate(gold, preds, schema_valid_count=schema_valid_count)
 
+    # ADR 0012 requires all three numbers to be published together. Reporting the
+    # system score alone would let a rules-driven result read as a distillation
+    # result, which is exactly the conflation the gate discipline exists to stop.
+    system_report = None
+    if args.validators:
+        merged = [
+            r.model_copy(
+                update={
+                    "spans": merge_with_model(r.spans, find_high_severity(r.text)),
+                }
+            )
+            for r in preds
+        ]
+        system_report = evaluate(gold, merged, schema_valid_count=schema_valid_count)
+
     if args.json:
         out = {
             "micro_f1": report.micro_f1,
@@ -135,10 +158,60 @@ def main() -> int:
                 for k, v in report.per_type.items()
             },
         }
+        if system_report is not None:
+            out["system"] = {
+                "micro_f1": system_report.micro_f1,
+                "micro_precision": system_report.micro_precision,
+                "micro_recall": system_report.micro_recall,
+                "high_severity_recall": system_report.high_severity_recall(),
+                "per_type": {
+                    k: {"p": v.precision, "r": v.recall, "f1": v.f1}
+                    for k, v in system_report.per_type.items()
+                },
+            }
         print(json.dumps(out, indent=2))
     else:
         print()
         print(report.format_table())
+        if system_report is not None:
+            print()
+            print("=" * 62)
+            print("  MODEL-ONLY vs SYSTEM (model + deterministic validators)")
+            print("  ADR 0012 — both are always reported; neither stands alone.")
+            print("=" * 62)
+            print(f"  {'':<24}{'model-only':>14}{'system':>12}")
+            print(f"  {'-' * 50}")
+            model_hs = report.high_severity_recall()
+            sys_hs = system_report.high_severity_recall()
+            rows = [
+                ("micro-F1", report.micro_f1, system_report.micro_f1),
+                ("micro-precision", report.micro_precision, system_report.micro_precision),
+                ("micro-recall", report.micro_recall, system_report.micro_recall),
+                (
+                    "min high-sev recall",
+                    min(model_hs.values(), default=0.0),
+                    min(sys_hs.values(), default=0.0),
+                ),
+            ]
+            for name, model_v, sys_v in rows:
+                delta = sys_v - model_v
+                sign = "+" if delta >= 0 else ""
+                print(f"  {name:<24}{model_v:>14.4f}{sys_v:>12.4f}   ({sign}{delta:.4f})")
+
+            print()
+            print(f"  {'high-severity type':<24}{'model-only':>14}{'system':>12}")
+            print(f"  {'-' * 50}")
+            below = 0
+            for label in sorted(sys_hs):
+                m, s = model_hs.get(label, 0.0), sys_hs[label]
+                flag = "" if s >= 0.99 else "  <- below 0.99 floor"
+                if s < 0.99:
+                    below += 1
+                print(f"  {label:<24}{m:>14.4f}{s:>12.4f}{flag}")
+            print()
+            print(f"  {len(sys_hs) - below}/{len(sys_hs)} high-severity floors pass under the system.")
+            print("  G1 parity is measured on model-only; the validator layer")
+            print("  carries the high-severity floor.")
 
     if args.check_gates:
         contract = load_contract(args.contract)
