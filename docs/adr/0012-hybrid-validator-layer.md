@@ -1,6 +1,6 @@
 # ADR 0012 — High-severity identifiers move to a deterministic validator layer
 
-**Status:** proposed — requires sign-off before the parity loop continues
+**Status:** accepted (2026-08-15)
 **Date:** 2026-08-15
 **Depends on:** `reports/baseline_120b.md` (the measurement that forces this)
 
