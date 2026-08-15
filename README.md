@@ -20,20 +20,29 @@ The privacy argument is airtight: **you cannot send sensitive text to a frontier
 
 ## Status — honest
 
-**Phase 4 of 6: the error-driven loop is running. No gate has passed yet except schema validity.**
+**Phase 4 of 6: the error-driven loop is running. Two gates pass; the parity gate is still open.**
+
+The bar is measured: **GPT-OSS-120B scores micro-F1 0.9482** on the frozen test set ([`reports/baseline_120b.md`](reports/baseline_120b.md)), so G1 requires the student to reach **0.9292**. That bar was measured *before* the student finished training, so it cannot be back-fitted.
 
 | Gate | Threshold | Measured | |
 |---|---|---|---|
-| G1 quality parity | student >= 0.98 x teacher | teacher bar being measured | ⏳ |
-| G2 schema validity | >= 99.9% | **100%** (385/385, run_001) | ✅ |
-| G3 cost per 1k | <= teacher / 10 | harness built, awaiting both runs | ⏳ |
-| G4 p95 latency | <= teacher / 5 | harness built, awaiting both runs | ⏳ |
+| G1 quality parity | student ≥ 0.9292 | run_002 scoring now (run_001 was 0.52) | ⏳ |
+| G2 schema validity | ≥ 99.9% | **100%** (385/385, run_001) | ✅ |
+| G3 cost per 1k | ≤ teacher / 10 | harness built, awaiting student run | ⏳ |
+| G4 p95 latency | ≤ teacher / 5 | teacher p95 = 8.02 s → student must beat 1.60 s | ⏳ |
 | G5 deployability | laptop / CPU | unquantized MPS only | ⏳ |
-| G6 safety / OOD | >= 0.90 | not started | ⏳ |
+| G6 safety / OOD | ≥ 0.90 | not started | ⏳ |
+| High-severity recall | ≥ 0.99 on 9 types | **9/9 pass at 1.0000** via validator layer | ✅ |
 
-Run history: **run_001** (150 training records) scored **F1 0.52** — error analysis traced it to severe per-type imbalance and multi-span blindness. **run_002** (837 records after targeted augmentation) is training now.
+### The finding that reshaped the project
 
-The full claim-by-claim ledger, including what is *not* yet true, lives in [`docs/NORTH_STAR.md`](docs/NORTH_STAR.md). Nothing in this README is quoted as a result until its gate says PASS.
+The teacher baseline showed **6 of 9 high-severity types missing their recall floor at the teacher** — DRIVER_LICENSE 0.53, BANK_ACCOUNT 0.79, AADHAAR 0.83. Distillation transfers blind spots, so a student at *perfect* parity would still miss half the driver's licences. The gate was unreachable by distillation, and moving it was not an option.
+
+The response ([`ADR 0012`](docs/adr/0012-hybrid-validator-layer.md)) is a deterministic validator layer — Verhoeff, Luhn, format and context rules — carrying the nine high-severity types while the distilled model keeps the contextual ones. That takes every floor to **1.0000 recall** for a micro-F1 cost of 0.0013.
+
+So the deliverable is a **specialist system**: rules for what rules do well, a distilled model for the contextual remainder. Three numbers are always published together — model-only, validator-only, and system — because quoting the system score as if it measured the distillation would be exactly the conflation this repo's gate discipline exists to prevent.
+
+The full claim-by-claim ledger, including what is *not* yet true, lives in [`docs/NORTH_STAR.md`](docs/NORTH_STAR.md). Nothing here is quoted as a result until its gate says PASS.
 
 ## How it works
 

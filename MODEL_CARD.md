@@ -71,17 +71,30 @@ regenerated only from seed 42. Primary metric is micro-F1 over exact
 `(start, end, label)` matches — partial credit is not given, because a span
 that half-covers a credit card number still leaks it.
 
+### The bar
+
+The teacher was scored on the same frozen set under the same harness, **before** the
+student finished training, so the parity threshold cannot be back-fitted:
+
+| Teacher (GPT-OSS-120B) | Value |
+|---|---|
+| micro-F1 | **0.9482** |
+| micro-precision / recall | 0.9615 / 0.9353 |
+| p50 / p95 latency | 0.59 s / 8.02 s |
+
+**⇒ G1 requires student micro-F1 ≥ 0.9292; G4 requires student p95 ≤ 1.60 s.**
+
 ### Gate table
 
 | Gate | Threshold | Measured | Verdict |
 |---|---|---|---|
-| G1 quality parity | student F1 >= 0.98 x teacher F1 | PENDING | — |
-| G2 schema validity | >= 99.9% | 100% (run_001, 385/385) | PASS |
-| G3 cost per 1k | <= teacher / 10 | PENDING | — |
-| G4 p95 latency | <= teacher / 5 | PENDING | — |
-| G5 deployability | runs on laptop / CPU | partial — unquantized MPS only | — |
-| G6 safety / OOD | OOD handling >= 0.90 | PENDING | — |
-| High-severity recall | >= 0.99 on 9 types | PENDING (run_001 far below) | FAIL |
+| G1 quality parity | ≥ 0.9292 | run_002 scoring | PENDING |
+| G2 schema validity | ≥ 99.9% | 100% (run_001, 385/385) | PASS |
+| G3 cost per 1k | ≤ teacher / 10 | run_002 scoring | PENDING |
+| G4 p95 latency | ≤ 1.60 s | run_002 scoring | PENDING |
+| G5 deployability | runs on laptop / CPU | partial — unquantized MPS only | PENDING |
+| G6 safety / OOD | ≥ 0.90 | not started | PENDING |
+| High-severity recall | ≥ 0.99 on 9 types | **1.0000 on all 9** (validator layer) | PASS |
 
 **Run history**
 
@@ -89,6 +102,26 @@ that half-covers a credit card number still leaks it.
 |---|---|---|---|---|---|
 | run_001 | 150 | 0.52 | 0.66 | 0.43 | teacher-annotated only; severe type imbalance |
 | run_002 | 837 | PENDING | PENDING | PENDING | + targeted augmentation (ADR 0009) |
+
+### The system is a hybrid, and the numbers are reported separately
+
+The teacher misses 6 of 9 high-severity recall floors (DRIVER_LICENSE 0.53, BANK_ACCOUNT
+0.79, AADHAAR 0.83). Distillation transfers blind spots, so no student trained on it can
+clear those floors. Per ADR 0012, the nine high-severity types are handled by
+**deterministic validators** — Verhoeff for Aadhaar, Luhn for cards, format and
+nearest-keyword context rules for the rest — which reach **1.0000 recall on all nine**.
+
+| Layer | What it covers | High-severity recall |
+|---|---|---|
+| Distilled model | PERSON, LOCATION, STREET_ADDRESS, DOB, AGE, USERNAME, EMAIL, PHONE, URL, IP | n/a |
+| Validators | the 9 high-severity structured identifiers | **1.0000** |
+
+Three numbers are always published together: **model-only** (this is G1), **validator-only**,
+and **system**. Quoting the system score as though it measured the distillation would
+misrepresent what the model learned.
+
+Note that checksums are used as a *precision and disambiguation* signal, never as a recall
+gate — see Limitations for why that distinction is load-bearing here.
 
 ## Known limitations
 
@@ -107,6 +140,16 @@ that half-covers a credit card number still leaks it.
   It is reproducible and leak-free, but it is *not* natural text, so scores
   overstate performance on messy real-world input. An external natural-text
   benchmark is the obvious next step and has not been run.
+- **The synthetic identifiers are not structurally valid.** Only 2 of 29 AADHAAR
+  values in the gold set satisfy the Verhoeff checksum (random chance is ~1/10),
+  because the generator emits random digits — whereas *every real* Aadhaar number
+  is checksummed. Credit cards happen to be Luhn-valid; the rest are not
+  format-verified. Two consequences, both real: the validators cannot use
+  checksums as a recall gate (doing so would score 0.07 here and ~1.0 on real
+  data, i.e. recall that silently depends on the dataset), and validator
+  precision on real input would likely be *higher* than measured here, since
+  checksums would filter false positives. A future contract version should
+  regenerate the gold set with structurally valid identifiers.
 - **The gold set has not had a documented human verification pass** (Protocol
   §5). Until it does, "human-verified" is not a claim this project may make.
 - **Unquantized.** Latency and size numbers are for fp16 on MPS. GGUF/AWQ
