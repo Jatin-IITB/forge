@@ -172,6 +172,28 @@ def main() -> int:
             resume_from = str(checkpoints[-1])
             print(f"resuming from {resume_from}")
 
+            # A resumed run takes its save schedule from the checkpoint's
+            # trainer_state.json, not from --save-steps: Transformers only
+            # *warns* about the mismatch and then keeps the stored value.
+            # Verified empirically — a fresh run with --save-steps 1 wrote a
+            # checkpoint every step, while a resumed run with the same flag
+            # wrote none, because the stored save_steps (500) exceeded the
+            # total step count. That silently removes all crash protection
+            # from exactly the runs that already proved they need it.
+            if args.save_steps:
+                state_path = Path(resume_from) / "trainer_state.json"
+                if state_path.exists():
+                    state = json.loads(state_path.read_text(encoding="utf-8"))
+                    if state.get("save_steps") != args.save_steps:
+                        print(
+                            f"  rewriting stored save_steps "
+                            f"{state.get('save_steps')} -> {args.save_steps}"
+                        )
+                        state["save_steps"] = args.save_steps
+                        state_path.write_text(
+                            json.dumps(state, indent=2) + "\n", encoding="utf-8"
+                        )
+
     print("starting training")
     trainer.train(resume_from_checkpoint=resume_from)
 
