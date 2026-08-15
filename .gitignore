@@ -47,3 +47,6 @@ data/seeds/
 
 # Long-run job logs
 logs/
+
+# Private working docs (aspirational drafts — must not ship publicly)
+RESUME_BRIEF.md
