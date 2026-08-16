@@ -27,7 +27,7 @@ GGUF     ?= models/pii-1.5b-gguf
 PYTHON   ?= python
 
 .PHONY: help install validate gold gold-sample infer teacher-baseline data-engine \
-        train eval economics error-analysis merge gguf test lint forge clean-preds
+        train eval economics error-analysis merge gguf report test lint forge clean-preds
 
 help:
 	@echo "Forge targets:"
@@ -43,6 +43,7 @@ help:
 	@echo "  make economics        # measure G3 (cost) + G4 (latency)"
 	@echo "  make merge            # fold the LoRA adapter into the base model"
 	@echo "  make gguf             # quantize the merged model for offline use"
+	@echo "  make report          # regenerate the technical report PDF from measured artifacts"
 	@echo "  make test / lint"
 	@echo ""
 	@echo "  make forge            # END-TO-END rebuild (teacher bar -> data -> train -> gates)"
@@ -103,6 +104,9 @@ merge:
 
 gguf: merge
 	$(PYTHON) scripts/export_model.py gguf --merged $(MERGED) --output $(GGUF)
+
+report:
+	$(PYTHON) scripts/build_report.py
 
 test:
 	$(PYTHON) -m pytest -q
