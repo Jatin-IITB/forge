@@ -24,7 +24,11 @@ BASE     ?= Qwen/Qwen2.5-1.5B-Instruct
 CKPT     ?= checkpoints/$(RUN)
 MERGED   ?= models/pii-1.5b-merged
 GGUF     ?= models/pii-1.5b-gguf
-PYTHON   ?= python
+# Prefer the project venv, then python3. A bare `python` does not exist on
+# macOS or most modern Linux distros, so defaulting to it made every target
+# fail with "No such file or directory" on a fresh clone — including the
+# `make forge` reproducibility claim.
+PYTHON   ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || command -v python3 || echo python)
 
 .PHONY: help install validate gold gold-sample infer teacher-baseline data-engine \
         train eval economics error-analysis merge gguf report test lint forge clean-preds
@@ -43,7 +47,7 @@ help:
 	@echo "  make economics        # measure G3 (cost) + G4 (latency)"
 	@echo "  make merge            # fold the LoRA adapter into the base model"
 	@echo "  make gguf             # quantize the merged model for offline use"
-	@echo "  make report          # regenerate the technical report PDF from measured artifacts"
+	@echo "  make report           # regenerate the technical report PDF from measured artifacts"
 	@echo "  make test / lint"
 	@echo ""
 	@echo "  make forge            # END-TO-END rebuild (teacher bar -> data -> train -> gates)"
