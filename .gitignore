@@ -52,3 +52,4 @@ logs/
 RESUME_BRIEF.md
 data/ood_probe.jsonl
 data/ood_results_*.json
+data/teacher_token_sample.jsonl
