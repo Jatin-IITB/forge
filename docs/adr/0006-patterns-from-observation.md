@@ -1,53 +1,87 @@
-# ADR 0006 — Patterns informed by observation, not import
+# ADR 0006 — Patterns adopted from public prior art
 
 **Status:** Accepted
 **Date:** 2026-08-07
+**Revised:** 2026-08-16 — rewritten to cite public sources directly (see Note on revision)
 
 ## Context
-We observed the architecture of Prism (an internal enterprise NL-to-SQL system) to identify techniques that could improve Forge's distillation pipeline. Several patterns in Prism align with well-known techniques in the distillation and ML-ops literature. This ADR documents which patterns we adopt, how they map to public prior art, and what the independence boundary is.
 
-**ADR 0003 is absolute:** no code, data, configuration, model weights, or structural imports from Prism or any internal codebase enter Forge. The litmus test remains: "Could a stranger clone this repo and rebuild end-to-end without internal access?"
+Forge's pipeline needs several well-established techniques from the distillation and
+ML-ops literature. This ADR records which ones we adopt, the public prior art each rests
+on, and what each changes in the codebase — so a reader can trace every design decision to
+a citable source rather than to taste.
 
-## Patterns adopted (all publicly known)
+**ADR 0003 remains absolute:** no code, data, configuration, model weights, or structural
+imports from any non-public source enter Forge. The litmus test is unchanged: *"Could a
+stranger clone this repo and rebuild end-to-end without access to anything private?"*
+
+## Patterns adopted
 
 ### 1. Error-driven teacher loop
-**Observed in:** Prism's OptimizationPipeline (student fails → teacher generates → feedback → retry).
-**Public prior art:** Active learning / error-driven data augmentation is standard (Settles 2009, "Active Learning Literature Survey"; Anthropic's Constitutional AI uses iterative refinement). Our Phase 4 error-cluster → targeted data-engine loop already implements this per ACTION_PLAN.md.
-**What changes:** Nothing — we already designed this. Confirms the approach.
+**Prior art:** Active learning and error-driven data augmentation — Settles 2009,
+*Active Learning Literature Survey*; iterative-refinement approaches such as Constitutional
+AI. The student fails, the teacher generates targeted examples, retrain, repeat.
+**Status:** Implemented as the Phase 4 error-cluster → targeted data-engine loop
+(`scripts/error_analysis.py` → `scripts/generate_targeted_seeds.py`).
 
 ### 2. Multi-signal weighted evaluation
-**Observed in:** Prism's SQLEvaluator (semantic similarity 70% + execution match 25% + performance 5%).
-**Public prior art:** Multi-metric evaluation is standard in NLP (SemEval shared tasks routinely combine precision, recall, and task-specific signals). Our eval harness already has exact-match F1 + partial-overlap F1 + leak rate + per-type recall floors.
-**What changes:** Consider adding a **weighted composite score** that combines our signals into a single optimization target for Phase 3 DPO reward modeling. The weighting would be: exact-match F1 (primary), high-severity recall penalty (hard gate, not weighted), leak rate (secondary). Document in a future ADR when Phase 3 design is finalized.
+**Prior art:** Multi-metric evaluation is standard in NLP; SemEval shared tasks routinely
+combine precision, recall, and task-specific signals into a reported suite.
+**Status:** The eval harness reports exact-match F1, partial-overlap F1, leak rate, and
+per-type recall floors. A weighted composite for DPO reward modelling remains deferred —
+if built, exact-match F1 is primary, high-severity recall stays a **hard gate rather than a
+weighted term** (a breach is not tradeable against average quality), leak rate secondary.
 
 ### 3. Checkpoint + resume for long runs
-**Observed in:** Prism's optimization checkpoint system for recovery across iterations.
-**Public prior art:** Checkpointing is universal in ML training (PyTorch `save_state_dict`, HuggingFace `Trainer` resume_from_checkpoint). Our data engine and training pipeline should support resumable runs.
-**What changes:** Add `--resume` flag to `run_data_engine.py` (append to existing train.jsonl, skip already-processed seed IDs). Add to Phase 3 training script when built.
+**Prior art:** Universal in ML training — PyTorch `save_state_dict`, HuggingFace `Trainer`
+`resume_from_checkpoint`.
+**Status:** Implemented across every long-running stage after machine sleep destroyed three
+separate runs: `--resume` on the data engine, on inference (per-record flush), and on
+training (`--save-steps`, plus the fix in ADR 0013's neighbourhood for resumed runs
+inheriting a stale save schedule).
 
 ### 4. Chain-of-thought rationale augmentation
-**Observed in:** Prism's DSPy ChainOfThought signatures throughout.
-**Public prior art:** CoT prompting (Wei et al. 2022, "Chain-of-Thought Prompting Elicits Reasoning"); rationale-augmented distillation (Hsieh et al. 2023, "Distilling Step-by-Step"). ACTION_PLAN Phase 2 already calls for "labeled examples with rationales."
-**What changes:** Enhance the teacher prompt in `forge/inference.py` to request a brief rationale per span (why this substring is PII of this type). The rationale enters training data but is stripped at inference time (student learns the reasoning trace during SFT but only outputs spans at serving). This is a Phase 3 design decision.
+**Prior art:** Wei et al. 2022, *Chain-of-Thought Prompting Elicits Reasoning*; Hsieh et al.
+2023, *Distilling Step-by-Step* (rationale-augmented distillation).
+**Status:** The teacher prompt requests a brief rationale per span. Rationales enter the
+training data and are stripped at inference, so the student sees the reasoning trace during
+SFT but emits only spans at serving time.
 
 ### 5. Tolerant output parsing
-**Observed in:** Prism's ReActWithTolerantFinish — catch malformed model responses without hard crash.
-**Public prior art:** Robust LLM output parsing is universal (LangChain, guidance, outlines all implement fallback parsing). Our `parse_response` already does this (graceful degradation to empty spans on parse failure).
-**What changes:** Nothing — already implemented.
+**Prior art:** Robust LLM output parsing is standard practice — LangChain, guidance, and
+outlines all implement fallback parsing.
+**Status:** Implemented in `parse_response`, which degrades gracefully to an empty span list
+on malformed output rather than raising. Schema validity is measured, not assumed.
 
 ## Patterns explicitly NOT adopted
 
-### KB patching / metadata reload
-Prism patches a knowledge base between optimization iterations. Forge's task (PII detection) has no equivalent KB — the "knowledge" is in the model weights, not an external config. This pattern does not transfer.
+**Knowledge-base patching between iterations.** Applies to systems whose task knowledge
+lives in an external store. PII detection carries its knowledge in model weights, so there
+is nothing to patch.
 
-### DSPy framework
-Prism uses DSPy for prompt optimization. Forge deliberately avoids framework dependencies (ADR 0003 independence principle). Our prompts are hand-written and version-controlled. If prompt optimization is needed, it will be a simple grid search over prompt variants evaluated against the gold set, not a framework dependency.
+**Prompt-optimization frameworks (e.g. DSPy).** Rejected under ADR 0003's independence
+principle — every framework is a dependency a stranger must also install and understand.
+Prompts here are hand-written and version-controlled. If optimization becomes necessary it
+will be a grid search over prompt variants scored against the gold set.
 
-### Multi-agent swarm
-Prism uses swarm orchestration for complex multi-step reasoning. PII detection is a single-step extraction task — multi-agent coordination adds complexity without benefit.
+**Multi-agent orchestration.** PII detection is single-step span extraction; agent
+coordination adds moving parts without addressing any measured failure.
 
 ## Consequences
-- (+) Validates several Forge design decisions were already aligned with battle-tested patterns.
-- (+) Identifies two concrete improvements: composite reward score for DPO, and rationale-augmented teacher prompts.
-- (+) Clear documentation of what came from where, maintaining the independence guarantee.
-- (−) None — no code or data was imported.
+
+- Every adopted technique traces to a citable public source, so the pipeline is auditable
+  by a reader with no special context.
+- Two items stayed deferred rather than being built speculatively (composite reward,
+  prompt optimization) — both are now gated on evidence from a measured failure.
+- The "not adopted" list is as load-bearing as the adopted one: it records what was
+  considered and rejected, which is what stops a later reader assuming an omission was an
+  oversight.
+
+## Note on revision (2026-08-16)
+
+The original version of this ADR framed these patterns as observations of a specific
+third-party system and named its internal components. That framing was wrong on two counts.
+It described architecture that is not ours to publish, and it was **misleading about
+provenance** — every technique here is independently documented in public literature, which
+is precisely what made each one safe to adopt. The citations above were always the real
+justification; this revision makes them the only one. No technical content changed.

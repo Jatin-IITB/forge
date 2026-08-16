@@ -6,7 +6,7 @@ A phased plan with **exit gates** (a phase is not "done" until its gate passes),
 > evidence → status) and the execution arcs that close it. The phases below are the general
 > playbook; the ledger is what "done" is measured against.
 
-> **Rule inherited from Aroha:** every phase ends in a *checkable artifact*, not a vibe. No phase is "done" because it feels done.
+> **Core rule:** every phase ends in a *checkable artifact*, not a vibe. No phase is "done" because it feels done.
 
 ---
 
@@ -14,14 +14,14 @@ A phased plan with **exit gates** (a phase is not "done" until its gate passes),
 **Goal:** decide exactly what we're building and how we'll know it works, before any modeling.
 
 **Steps**
-1. **Pick the flagship task.** Selection criteria: (a) narrow & well-defined, (b) high-volume / expensive at frontier prices, (c) a *checkable* metric, (d) privacy/meaning-relevant, (e) teacher ToS + base-model license permit distillation, **(f) uses fully PUBLIC data + open weights — nothing internal/internship-bound (`adr/0003`).**
+1. **Pick the flagship task.** Selection criteria: (a) narrow & well-defined, (b) high-volume / expensive at frontier prices, (c) a *checkable* metric, (d) privacy/meaning-relevant, (e) teacher ToS + base-model license permit distillation, **(f) uses fully PUBLIC data + open weights — nothing private (`adr/0003`).**
    - Candidate tasks (all public-data; pick one in this phase):
      - **A. On-device PII detection / redaction** — *Recommended.* Entity/span tagging on text. Meaning is airtight (you can't send PII to an API to find PII → local model is the *only* compliant option; GDPR / India DPDP Act). Public corpora exist (open PII-masking datasets on Hugging Face). Crisp metric (entity P/R/F1). Visceral offline demo. See DESIGN §0.2.
      - **B. Structured field extraction from public documents** — free text → JSON schema (e.g. public invoices/receipts/resumes/filings). Crisp metric (field-F1 + schema-validity); broad utility.
      - **C. Small specialist for an under-served Indian language** — classification/extraction/translation on public Indic corpora (AI4Bharat/IndicNLP/FLORES). Meaning = accessibility/democratization; runs on a phone. Harder eval (generation), so secondary.
 2. **Write `TaskContract`** (DESIGN §1) and commit it. Immutable for a run.
 3. **Build the gold set:** 300–1,000 human-verified examples drawn/curated from **public** sources, de-duplicated, **leakage-checked** against any synthetic source. Split: dev / test (test stays frozen & untouched until Phase 4 gates).
-4. **Choose teacher + base model — both open/independent.** Teacher = an **open-weight** model (e.g. Llama-3.x / Qwen2.5 / DeepSeek) or a public API whose terms permit distillation — **never an internal/company-hosted model you'll lose access to.** Base student = e.g. Qwen2.5-1.5B/3B or Llama-3.2-1B/3B (permissive license). Run the `adr/0003` litmus test before exiting.
+4. **Choose teacher + base model — both open/independent.** Teacher = an **open-weight** model (e.g. Llama-3.x / Qwen2.5 / DeepSeek) or a public API whose terms permit distillation — **never a privately hosted model you could lose access to.** Base student = e.g. Qwen2.5-1.5B/3B or Llama-3.2-1B/3B (permissive license). Run the `adr/0003` litmus test before exiting.
 
 **Exit gate:** committed `TaskContract`; a frozen `test.jsonl` (public-sourced) with a documented labeling protocol + inter-annotator spot-check; written teacher/base-model license clearance; **and the `adr/0003` independence litmus test passes.** No modeling has happened yet — correct.
 
@@ -113,7 +113,7 @@ A phased plan with **exit gates** (a phase is not "done" until its gate passes),
 
 **Steps**
 1. **Benchmark table** + a 30-second **demo** (the contrast shot: "GPT-4-class quality, 1% cost, on a laptop").
-2. **Writeup** in Aroha's doc style: this `DESIGN.md`, an *honest assessment*, the field comparison, the novelty calibration.
+2. **Writeup**: this `DESIGN.md`, an *honest assessment*, the field comparison, the novelty calibration.
 3. (Optional) Open-source the *pipeline* (not just the model) — the contract-driven `make forge` is the reusable artifact others can run on their own task.
 
 **Exit gate:** a stranger can read the writeup, run `make forge`, and reproduce a passing model.
@@ -133,7 +133,7 @@ A phased plan with **exit gates** (a phase is not "done" until its gate passes),
 
 ---
 
-## Risk register (severity-tagged, Aroha-style)
+## Risk register (severity-tagged)
 - **[CRITICAL] Teacher ToS / license** forbids distillation → blocks publishing. *Mitigation:* settle in Phase 0; prefer open-weight teacher + permissive base.
 - **[CRITICAL] Leaky/weak gold set** → parity claims are meaningless. *Mitigation:* human curation + leakage check + frozen test.
 - **[HIGH] Training on the teacher's confident mistakes** → silent quality cap. *Mitigation:* verification gate (mandatory).

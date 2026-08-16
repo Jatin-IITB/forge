@@ -4,7 +4,7 @@
 **Date:** 2026-06-10
 
 ## Context
-The most common self-deception in fine-tuning is choosing or relaxing the success target *after* seeing model results. This produces impressive-looking numbers that mean nothing. Aroha's AHSI enforces a structural discipline ("mandatory index-before-retrieve") rather than trusting the model/engineer to do the right thing; we adopt the same stance for evaluation.
+The most common self-deception in fine-tuning is choosing or relaxing the success target *after* seeing model results. This produces impressive-looking numbers that mean nothing. Well-designed systems enforce such invariants structurally rather than trusting the engineer to remember; we adopt that stance for evaluation.
 
 ## Decision
 The held-out **gold test set** is built, human-verified, leakage-checked, and **frozen** in Phase 0 — before any training data is generated. The **parity gate** (`student_score ≥ 0.98 × teacher_score`, plus the cost/latency/safety gates) is committed to git in the `TaskContract` before modeling begins and is **immutable for a run**. The frozen test set is not inspected during data generation or training; it is touched only by the evaluation harness in Phase 4.

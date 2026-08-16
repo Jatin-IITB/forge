@@ -57,7 +57,7 @@ Same-family teacher/student (both Qwen2.5) also simplifies tokenizer/template al
 
 ## Independence litmus test — result: **PASS**
 Open-weight Apache-2.0 teacher + open-weight Apache-2.0 base + MIT/self-generated data +
-commodity compute + OSS-only code. If internship access were cut tomorrow, a stranger
+commodity compute + OSS-only code. If every private credential were revoked tomorrow, a stranger
 could clone the repo and rebuild the model end-to-end. ✅
 
 ## Consequences

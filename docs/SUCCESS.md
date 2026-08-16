@@ -1,6 +1,6 @@
 # Forge — Definition of Success
 
-Mirrors the Aroha `MATURITY_REPORT.md` discipline: criteria scored against **pre-committed gates**, with confidence, severity-tagged risks, and an explicit verdict. Success is **not** "the model seems good." Success is "every gate below passed on a frozen test set, with confidence intervals, and the result is reproducible."
+Criteria are scored against **pre-committed gates**, with confidence, severity-tagged risks, and an explicit verdict. Success is **not** "the model seems good." Success is "every gate below passed on a frozen test set, with confidence intervals, and the result is reproducible."
 
 There are three layers of success. **Layer 1 is non-negotiable; Layer 2 makes it credible; Layer 3 makes it valuable to a reader.**
 
@@ -23,14 +23,14 @@ There are three layers of success. **Layer 1 is non-negotiable; Layer 2 makes it
 
 ## Layer 2 — Engineering maturity (credibility of the result)
 
-Scored /10, Aroha-style. Target ≥ 7 on each before calling v1 done.
+Scored /10. Target ≥ 7 on each before calling v1 done.
 
 | Criterion | Target | What "good" looks like |
 |-----------|--------|------------------------|
 | Eval rigor | 9 | frozen gold set, human-curated, leakage-checked; CIs on every number; teacher measured under identical harness |
 | Data integrity | 9 | verification gate with logged accept/reject; dedup + leakage = 0; data card published |
 | Reproducibility | 8 | `make forge TASK=<contract>` rebuilds the asset on a clean machine; seeds fixed; versions pinned |
-| Cost transparency | 8 | $/1k and per-loop teacher-token spend tracked and reported (Aroha tracks token cost; so do we) |
+| Cost transparency | 8 | $/1k and per-loop teacher-token spend tracked and reported (tracked per loop iteration, not estimated) |
 | Honesty of writeup | 9 | novel-vs-standard calibration; field comparison; weaknesses section — no hype |
 | Robustness | 7 | OOD + adversarial probe sets exist and are reported, not hidden |
 | Licensing/legal | 10 (pass/fail) | teacher ToS + base-model license cleared for distillation & release |
@@ -43,16 +43,16 @@ The artifact must reduce to **one undeniable sentence + one table + one command*
 
 > "A 1–3B model I built that matches GPT-4-class quality on **\<task\>** at **~1% of the cost**, running on a laptop — here's the benchmark table, and `make forge` rebuilds it from scratch."
 
-It succeeds on this layer iff it demonstrably proves the muscle Aroha does **not**: **model manufacture** (SFT/distillation/DPO), **inference economics** (quantization/serving/$-per-1k), and **measurement rigor** (eval-first parity contract). If a reader finishes and still thinks "this is just prompting," Layer 3 failed regardless of Layer 1.
+It succeeds on this layer iff it demonstrably proves the muscle an orchestration portfolio does **not**: **model manufacture** (SFT/distillation/DPO), **inference economics** (quantization/serving/$-per-1k), and **measurement rigor** (eval-first parity contract). If a reader finishes and still thinks "this is just prompting," Layer 3 failed regardless of Layer 1.
 
 ---
 
-## What would make this a *failure* (stated plainly, Aroha-style honesty)
+## What would make this a *failure* (stated plainly)
 - **Moving the gate after seeing results** — if the parity target is renegotiated post-hoc, the result is void.
 - **Parity on a leaky or trivial gold set** — a high number on a contaminated/easy test set is worse than no number.
 - **Cost win without quality** (or vice versa) — both G1 and G3 must hold; a cheap-but-worse model is not the product.
 - **Irreproducible** — a great model that only exists in one notebook on one machine is not an asset.
-- **A second, smaller Aroha** — if the project ends up demonstrating LLM *orchestration* again instead of model *building*, it failed its entire reason for existing.
+- **Another orchestration project in disguise** — if it ends up demonstrating LLM *orchestration* again instead of model *building*, it failed its entire reason for existing.
 
 ---
 

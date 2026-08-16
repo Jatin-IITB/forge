@@ -1,25 +1,25 @@
 # Forge — Task-Specialization Distillation Pipeline
 
 **Codename:** Forge (working name — rename freely).
-**Where it lives:** a standalone repo (`forge/`), independent of Prism/Aroha.
+**Where it lives:** a fully standalone repo (`forge/`), with no private dependencies.
 **Who uses it:** an ML engineer who has *one expensive, high-volume LLM task* and wants to stop paying frontier-API prices for it.
 **One-line summary:** Forge takes a task spec + a teacher model and **manufactures a verified specialist student model** that matches the teacher's task quality within a pre-committed tolerance, at **10–100× lower cost and latency**, runnable fully private — and it does so through an *eval-first, verification-gated, error-driven data loop*, not a one-shot fine-tune script.
 
-This document explains the design from first principles, names the choices that are genuinely state-of-the-art vs. the ones that are solid-but-standard engineering, and compares Forge honestly to the rest of the field. It deliberately mirrors the discipline of the Aroha `AHSI_Code_Indexing_Design.md`.
+This document explains the design from first principles, names the choices that are genuinely state-of-the-art vs. the ones that are solid-but-standard engineering, and compares Forge honestly to the rest of the field. It follows a deliberate documentation discipline: name the trade-offs, cite the prior art, and state the weaknesses before a reader finds them.
 
 ---
 
 ## 0. Why this project exists (the gap it fills)
 
-The flagship system in this engineer's portfolio (Aroha) proves one muscle exceptionally well: **orchestrating frontier LLMs** — prompts, tools, memory, multi-agent reliability, in-context "RL." It proves **zero** of another muscle: **building a model.** No SFT, no distillation, no preference optimization, no inference/serving economics, no GPU work. To a reader, Aroha says *"I can make models behave"* and leaves open *"...but can you make a model, cheaply and privately?"*
+An LLM-orchestration portfolio proves one muscle well: **making frontier models behave** — prompts, tools, memory, multi-agent reliability, in-context "RL." It proves **zero** of another: **building a model.** No SFT, no distillation, no preference optimization, no inference/serving economics, no GPU work. Such a portfolio says *"I can make models behave"* and leaves open *"...but can you make a model, cheaply and privately?"*
 
-Forge is the answer to that open question. It is deliberately **not another agent.** Aroha *calls* GPT-4 at runtime and pays per token forever; Forge *produces a 1–8B model that replaces* GPT-4 for one task. Orchestration vs. **manufacture.** Different toolchain (PyTorch / `transformers` / PEFT / TRL / vLLM / constrained decoding / synthetic-data engineering), different value prop (a cheap private asset vs. a recurring API bill).
+Forge is the answer to that open question. It is deliberately **not another agent.** Orchestration *calls* a frontier model at runtime and pays per token forever; Forge *produces a 1–8B model that replaces* it for one task. Orchestration vs. **manufacture.** Different toolchain (PyTorch / `transformers` / PEFT / TRL / vLLM / constrained decoding / synthetic-data engineering), different value prop (a cheap private asset vs. a recurring API bill).
 
 The economic premise is concrete: for a *narrow* task at volume, a small fine-tuned model routinely matches a frontier model — the frontier model's edge is *generality*, which a single task does not need. You are buying a sports car to commute one fixed route; Forge builds the commuter.
 
 ### 0.1 Hard constraint — independence (this asset must outlive any single job)
 
-Forge depends on **nothing internal** to any employer/internship: open-weight teacher, permissive-license base model, **public datasets** (or synthetic data the open teacher derives from public seeds), and personal/commodity compute. No internal hosted models, no proprietary data, no Aroha/Prism code. The only thing carried over from Aroha is *documentation discipline* — portable practice, not a dependency. **Litmus test:** if access to everything internal were cut tomorrow, a stranger could still clone the repo and rebuild the model end-to-end. See `adr/0003`. This constraint also pushes the flagship task toward problems with strong public corpora — which, conveniently, are also the most *meaningful* (see §0.2).
+Forge depends on **nothing private**: open-weight teacher, permissive-license base model, **public datasets** (or synthetic data the open teacher derives from public seeds), and personal/commodity compute. No privately hosted models, no proprietary data, no private code. The only thing carried over from prior work is *documentation discipline* — portable practice, not a dependency. **Litmus test:** if every private credential were revoked tomorrow, a stranger could still clone the repo and rebuild the model end-to-end. See `adr/0003`. This constraint also pushes the flagship task toward problems with strong public corpora — which, conveniently, are also the most *meaningful* (see §0.2).
 
 ### 0.2 Why the flagship is on-device PII redaction (meaning + independence align)
 
@@ -94,8 +94,8 @@ The loop is the system. A one-shot "generate data → fine-tune → ship" pipeli
 
 ### Two non-obvious, load-bearing touches
 
-- **Verification-gated data (the "garbage gate").** Every synthetic example must pass a verifier before it can train the student: self-consistency (teacher agrees with itself across k samples), schema/constraint validity, and (where cheap) a held-out re-derivation. Distillation's #1 failure mode is training on the teacher's *confident mistakes*; the gate is the unglamorous thing that makes the output trustworthy. This is Forge's analogue of AHSI's "no code bodies / disk-truth" discipline — refuse to persist what you can't trust.
-- **Error-driven data targeting (the cost-shaper).** After each eval, failures are clustered and the Data Engine generates new examples *concentrated on those clusters*, not uniformly. This is active learning: spend teacher tokens where the student is wrong, not where it's already right. It is the analogue of AHSI's Levenshtein gate — the detail that determines whether the system is *affordable*, because teacher-API tokens for data generation are the dominant cost.
+- **Verification-gated data (the "garbage gate").** Every synthetic example must pass a verifier before it can train the student: self-consistency (teacher agrees with itself across k samples), schema/constraint validity, and (where cheap) a held-out re-derivation. Distillation's #1 failure mode is training on the teacher's *confident mistakes*; the gate is the unglamorous thing that makes the output trustworthy. The principle is simple: refuse to persist what you cannot verify.
+- **Error-driven data targeting (the cost-shaper).** After each eval, failures are clustered and the Data Engine generates new examples *concentrated on those clusters*, not uniformly. This is active learning: spend teacher tokens where the student is wrong, not where it's already right. It is the detail that determines whether the system is *affordable*, because teacher-API tokens for data generation are the dominant cost.
 
 ---
 
@@ -119,7 +119,7 @@ All gates are **pre-committed in the contract** and measured with confidence int
 ## 4. Architectural decisions (each will get an ADR)
 
 ### 4.1 Eval-first: the gold set exists before the model (correctness contract)
-We build and freeze the held-out gold evaluation set in Phase 0, before generating a single training example, and the parity gate is committed to git up front. This forbids the most common self-deception in fine-tuning — tuning the target after seeing results. Mirrors AHSI's *mandatory index-before-retrieve*: the architecture forbids the gap rather than trusting discipline. → `adr/0001`.
+We build and freeze the held-out gold evaluation set in Phase 0, before generating a single training example, and the parity gate is committed to git up front. This forbids the most common self-deception in fine-tuning — tuning the target after seeing results. The architecture forbids the gap rather than trusting the engineer to remember. → `adr/0001`.
 
 ### 4.2 Distill the rationale, not just the label
 For reasoning-bearing tasks the teacher emits a short rationale + final answer; the student is trained on rationale-augmented targets (and the rationale can be dropped at inference for speed). Reason: chain-of-thought distillation consistently beats label-only distillation at equal data budget. Standard technique, deliberately chosen.
@@ -154,7 +154,7 @@ No unverified teacher output enters the training set (§2). → `adr/0002`.
 4. Treating **cost & latency as first-class gates** measured end-to-end on real serving.
 5. The whole thing as a **reproducible, contract-driven system** that compiles *any* conforming task into a benchmarked model — not a one-off notebook.
 
-Honest verdict on novelty: **no single component is a research contribution; the disciplined, reproducible *combination* is the contribution** — exactly the framing AHSI uses about itself. The portfolio value is that it proves end-to-end model-building competence, not that it invents distillation.
+Honest verdict on novelty: **no single component is a research contribution; the disciplined, reproducible *combination* is the contribution.** The portfolio value is that it proves end-to-end model-building competence, not that it invents distillation.
 
 ---
 
@@ -187,7 +187,7 @@ Honest framing: Forge sits on the boundary between "a fine-tuning recipe" and "a
 3. **Teacher ToS / licensing — a real legal caveat.** Some frontier-API terms (e.g. OpenAI) restrict using outputs to train competing models. **Choose a teacher whose terms permit distillation** (open-weight teachers like Llama/Qwen/DeepSeek, or a provider whose ToS allows it) and use a base model with a permissive license. This must be settled in Phase 0; it is non-negotiable for a publishable/portfolio artifact.
 4. **Narrowness is the point and the trap.** The specialist is intentionally brittle outside its task; without an input-domain guard it will confidently mishandle out-of-distribution input. The OOD/refusal gate (§3) exists precisely for this.
 5. **Distribution drift.** If the task's real input distribution shifts post-deployment, the specialist silently degrades. Production use needs drift monitoring + periodic re-distillation; v1 ships the monitor hook, not the full MLOps loop.
-6. **Cold-start teacher-token cost.** Generating + verifying the first dataset is the dominant spend (mirrors AHSI's "LLM-summary cost on first index"). The error-driven loop (§2) is what keeps subsequent rounds cheap; budget the cold start explicitly (`ACTION_PLAN.md` §Budget).
+6. **Cold-start teacher-token cost.** Generating + verifying the first dataset is the dominant spend. The error-driven loop (§2) is what keeps subsequent rounds cheap; budget the cold start explicitly (`ACTION_PLAN.md` §Budget).
 
 ---
 

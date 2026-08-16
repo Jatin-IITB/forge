@@ -6,17 +6,17 @@ Project context for any Claude Code session working in this repo. Read this firs
 **Forge** — a task-specialization distillation pipeline. Give it one expensive, high-volume LLM task + a teacher model; it manufactures a verified small specialist model that matches teacher quality within a committed tolerance at 10–100× lower cost/latency, runnable fully private. **Not an agent.** This project deliberately proves *model manufacture* (SFT / distillation / DPO / serving economics / eval rigor), the counterpart to an LLM-orchestration portfolio.
 
 ## The one rule that overrides everything: INDEPENDENCE
-This is a **personal portfolio project** built during an internship. It must depend on **nothing internal** to any employer:
-- Teacher model: **open-weight** (Llama-3.x / Qwen2.5 / DeepSeek) or a public API whose ToS permits distillation. **Never** an internal/company-hosted model.
+This is a **personal portfolio project**, built independently. It must depend on **nothing private** — no employer's systems, data, or code:
+- Teacher model: **open-weight** (Llama-3.x / Qwen2.5 / DeepSeek) or a public API whose ToS permits distillation. **Never** a privately hosted model behind a corporate account.
 - Base model: open, **permissive license**.
-- Data: **public datasets only** (or synthetic from the open teacher on public seeds). **No proprietary / internal / internship-acquired data, ever.**
-- Compute: personal or commodity cloud. Code: OSS only. **No imports from any internal codebase (Aroha/Prism etc.).**
-- **Litmus test (apply constantly):** "If internal access were cut tomorrow, could a stranger clone this repo and rebuild the model end-to-end?" If not yes — remove the dependency. See `docs/adr/0003`.
+- Data: **public datasets only** (or synthetic from the open teacher on public seeds). **No proprietary or otherwise private data, ever.**
+- Compute: personal or commodity cloud. Code: OSS only. **No imports from any private codebase.**
+- **Litmus test (apply constantly):** "If every private credential were revoked tomorrow, could a stranger clone this repo and rebuild the model end-to-end?" If not yes — remove the dependency. See `docs/adr/0003`.
 
 ## Git / identity
-- This is a **personal** repo on the **`Jatin-IITB`** GitHub account. Commits use the personal identity **`Jatin Gupta <22B3967@iitb.ac.in>`**, set via **local** repo config (never touch global, never the Paytm/work identity). Verify `git config user.email` returns `22B3967@iitb.ac.in` before committing.
+- This is a **personal** repo on the **`Jatin-IITB`** GitHub account. Commits use the personal identity **`Jatin Gupta <22B3967@iitb.ac.in>`**, set via **local** repo config (never touch global, never a work identity). Verify `git config user.email` returns `22B3967@iitb.ac.in` before committing.
 - Auth is via the **`gh` CLI over HTTPS** (gh is the git credential helper). Remote: `https://github.com/Jatin-IITB/forge.git`.
-- Never commit: proprietary/internal data, secrets/`.env`, large model weights or generated datasets (see `.gitignore`).
+- Never commit: proprietary or private data, secrets/`.env`, large model weights or generated datasets (see `.gitignore`).
 
 ## Read in this order
 1. `docs/DESIGN.md` — first-principles system design, novelty calibration, field comparison.
@@ -33,7 +33,7 @@ final teacher: GPT-OSS-120B via Cerebras free tier (`adr/0010`, key = `CEREBRAS_
 run_001 F1 = 0.52 → error analysis → construction-verified augmentation (`adr/0009`, seed 1337)
 → run_002 training. The claim ledger in `docs/NORTH_STAR.md` tracks what's proven vs pending.
 
-## Working principles (Aroha doc discipline — portable practice)
+## Working principles (documentation discipline — portable practice)
 - Eval-first: the frozen gold set + parity gate exist before the model.
 - Verification-gated data: never train on the teacher's unverified output.
 - Error-driven loop: spend teacher tokens where the student is wrong.

@@ -4,7 +4,7 @@
 **Date:** 2026-06-10
 
 ## Context
-Distillation's #1 silent failure is training the student on the teacher's *confident mistakes*. A teacher model that is 92% correct will, unfiltered, teach the student its 8% errors as ground truth — permanently capping student quality below an already-imperfect ceiling. This is the analogue of persisting untrusted state; AHSI refuses to persist what it can't verify against disk truth, and Forge refuses to train on what it can't verify.
+Distillation's #1 silent failure is training the student on the teacher's *confident mistakes*. A teacher model that is 92% correct will, unfiltered, teach the student its 8% errors as ground truth — permanently capping student quality below an already-imperfect ceiling. This is the analogue of persisting untrusted state: Forge refuses to train on what it cannot verify.
 
 ## Decision
 No teacher output enters the training set unless it passes a **verification gate**:
