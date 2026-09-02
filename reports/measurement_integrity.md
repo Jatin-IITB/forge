@@ -96,26 +96,47 @@ from train/dev/test) provides the first genuinely out-of-sample measurement:
 overfitting. And because `val` carries 339 high-severity instances against test's 232, the
 pooled bound of **0.9948** clears the 0.99 floor with evidence for the first time.
 
-### False positives: 55, and none of them redact clean text
+### False positives: 55 → 0 *(fixed 2026-09-03)*
 
-Raw precision is 0.911 (571 TP, 55 FP). But every one of the 55 overlaps a real gold PII span
-— there is **zero over-redaction of non-PII text**. They are label and boundary errors:
+Precision was 0.9114 (571 TP, 55 FP). Every one of the 55 overlapped a real gold PII span —
+there was never any over-redaction of clean text — so all were type or boundary errors:
 
-| count | confusion | example | gold |
+| count | confusion | claimed | gold |
 |---|---|---|---|
 | 41 | `CREDIT_CARD` ← PHONE | `'91 99854 35346'` | `'+91 99854 35346'` |
 | 13 | `PASSWORD` ← USERNAME | `'randy04'` | `'randy04'` (identical span) |
 | 1 | `PASSWORD` ← EMAIL | `'adam65@example'` | `'adam65@example.net'` |
 
-Under exact-match scoring each counts as a FP and a FN. Under the redaction lens that matters
-for the product, the PII is still covered in all 55 cases — **except one**: truncating
-`adam65@example.net` to `adam65@example` leaves `.net` unredacted. That is a genuine partial
-leak and the only one in 571 instances.
+**All three are now fixed. Precision is 1.0000 on both splits, recall unchanged at 1.0000.**
 
-The dominant failure is a **type-disambiguation weakness, not a detection weakness**: a
-`+`-prefixed international phone number reads as a card, and a username reads as a password.
-Both are cheap to fix in `_resolve_overlaps` and are the highest-value next change to
-`forge/validators.py`.
+| | before | after |
+|---|---|---|
+| recall (571 instances) | 1.0000 | **1.0000** |
+| false positives | 55 | **0** |
+| precision | 0.9114 | **1.0000** |
+
+- **The `+` prefix.** A leading `+` is an international dialling code, never part of a card.
+  `\b` did not help: `+` is a non-word character, so it *creates* a boundary. Guarded with
+  `(?<![+\d])`.
+- **The keyword list.** `login` and `credentials` introduce a username at least as often as a
+  secret. Both were dropped rather than patched around; recall is unchanged on both splits, so
+  they were carrying no detections of their own.
+- **The email truncation** was the only genuine leak of the 55, because `merge_with_model`
+  lets a validator span evict the model's correct `EMAIL` span, so `.net` would have survived
+  redaction. It needed **two** guards: `(?!\.\w)` rejects the domain suffix, but the greedy
+  `{6,}` then backtracks to `adam65` and re-creates the same leak one token shorter, so
+  `(?!@)` rejects the local part too.
+
+  **Worth recording: the gold-set measurement did not catch that second form.** The
+  single-claimant rule below happened to drop it on every gold record that contained it, so
+  the aggregate read 0 FP while the defect was still live. Only an isolated unit test on a
+  synthetic sentence exposed it. A corpus-level metric can hide a bug that another rule is
+  incidentally masking.
+- **Residual 6.** `"Failed password attempt: 'oly_4121!FN' for rachit77."` holds one keyword
+  and two password-shaped tokens, and both were claimed. One keyword introduces one secret,
+  and the secret is the token nearest to it — distance 13 here against 30.
+  `_drop_outranked_secrets` keeps only the nearest candidate for single-claimant types, and
+  keeps ties, so a text with two genuine passwords cannot lose one.
 
 ---
 

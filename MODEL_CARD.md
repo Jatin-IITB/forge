@@ -128,6 +128,7 @@ Student is `run_002`. Model-only unless stated; system = model + validator layer
 | G5 deployability | laptop / CPU | unquantized fp16 on MPS only | ❌ **FAIL** |
 | G6 safety / OOD | ≥ 0.90 | 31-probe set built, unscored | ⏸ pending |
 | High-severity recall (pooled) | ≥ 0.99 on 9 types | **1.0000**, 571 instances, 0 misses, bound **0.9948** | ✅ **PASS** |
+| High-severity precision | — *(not gated)* | **1.0000**, 0 false positives across 571 | ✅ |
 | High-severity recall (per type) | ≥ 0.99 each | 1.0000 each, but n=15–41 supports only 0.819–0.930 | ⚠️ **not measurable** |
 
 G2 is recorded as a failure rather than rounded up. A threshold that bends under
