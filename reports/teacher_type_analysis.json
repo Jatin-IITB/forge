@@ -1,0 +1,259 @@
+{
+  "gold": "data/gold/test.jsonl",
+  "teacher": "data/predictions_teacher_120b_test.jsonl",
+  "student": "data/predictions_student_run_002.jsonl",
+  "per_type": {
+    "PERSON": {
+      "n": 175,
+      "teacher_exact_recall": 0.9943,
+      "teacher_boundary_only": 1,
+      "teacher_f1": 0.9915,
+      "student_f1": 0.5,
+      "headroom": 0.4915,
+      "owner": "model",
+      "boundary_examples": [
+        {
+          "gold": "Mr Peter Riley",
+          "pred": "Peter Riley"
+        }
+      ]
+    },
+    "EMAIL": {
+      "n": 65,
+      "teacher_exact_recall": 1.0,
+      "teacher_boundary_only": 0,
+      "teacher_f1": 1.0,
+      "student_f1": 0.9265,
+      "headroom": 0.0735,
+      "owner": "model",
+      "boundary_examples": []
+    },
+    "USERNAME": {
+      "n": 42,
+      "teacher_exact_recall": 1.0,
+      "teacher_boundary_only": 0,
+      "teacher_f1": 1.0,
+      "student_f1": 0.3881,
+      "headroom": 0.6119,
+      "owner": "model",
+      "boundary_examples": []
+    },
+    "CREDIT_CARD": {
+      "n": 41,
+      "teacher_exact_recall": 1.0,
+      "teacher_boundary_only": 0,
+      "teacher_f1": 0.9318,
+      "student_f1": 0.5977,
+      "headroom": 0.3341,
+      "owner": "validator",
+      "boundary_examples": []
+    },
+    "PHONE": {
+      "n": 35,
+      "teacher_exact_recall": 1.0,
+      "teacher_boundary_only": 0,
+      "teacher_f1": 1.0,
+      "student_f1": 0.7381,
+      "headroom": 0.2619,
+      "owner": "model",
+      "boundary_examples": []
+    },
+    "STREET_ADDRESS": {
+      "n": 32,
+      "teacher_exact_recall": 0.8438,
+      "teacher_boundary_only": 4,
+      "teacher_f1": 0.8571,
+      "student_f1": 0.0923,
+      "headroom": 0.7648,
+      "owner": "model",
+      "boundary_examples": [
+        {
+          "gold": "6537 Rogers Light, Karenchester",
+          "pred": "6537 Rogers Light"
+        },
+        {
+          "gold": "01/12, Banik Circle, Ballia",
+          "pred": "Banik Circle"
+        },
+        {
+          "gold": "Flat 4, Abdul Isle, Sheilaland",
+          "pred": "Flat 4, Abdul Isle, Sheilaland."
+        }
+      ]
+    },
+    "API_KEY": {
+      "n": 29,
+      "teacher_exact_recall": 1.0,
+      "teacher_boundary_only": 0,
+      "teacher_f1": 1.0,
+      "student_f1": 0.5778,
+      "headroom": 0.4222,
+      "owner": "validator",
+      "boundary_examples": []
+    },
+    "BANK_ACCOUNT": {
+      "n": 29,
+      "teacher_exact_recall": 0.7931,
+      "teacher_boundary_only": 0,
+      "teacher_f1": 0.8846,
+      "student_f1": 0.3889,
+      "headroom": 0.4957,
+      "owner": "validator",
+      "boundary_examples": []
+    },
+    "AADHAAR": {
+      "n": 29,
+      "teacher_exact_recall": 0.8276,
+      "teacher_boundary_only": 1,
+      "teacher_f1": 0.8889,
+      "student_f1": 0.1887,
+      "headroom": 0.7002,
+      "owner": "validator",
+      "boundary_examples": [
+        {
+          "gold": "0413 7977 2369",
+          "pred": "Aadhaar 0413 7977 2369"
+        }
+      ]
+    },
+    "PAN": {
+      "n": 29,
+      "teacher_exact_recall": 0.931,
+      "teacher_boundary_only": 2,
+      "teacher_f1": 0.931,
+      "student_f1": 0.68,
+      "headroom": 0.251,
+      "owner": "validator",
+      "boundary_examples": [
+        {
+          "gold": "MSRPE0506C",
+          "pred": "PAN MSRPE0506C"
+        },
+        {
+          "gold": "EZSYF9842X",
+          "pred": "PAN EZSYF9842X"
+        }
+      ]
+    },
+    "IP_ADDRESS": {
+      "n": 28,
+      "teacher_exact_recall": 1.0,
+      "teacher_boundary_only": 0,
+      "teacher_f1": 1.0,
+      "student_f1": 0.7931,
+      "headroom": 0.2069,
+      "owner": "model",
+      "boundary_examples": []
+    },
+    "DATE_OF_BIRTH": {
+      "n": 25,
+      "teacher_exact_recall": 1.0,
+      "teacher_boundary_only": 0,
+      "teacher_f1": 1.0,
+      "student_f1": 0.507,
+      "headroom": 0.493,
+      "owner": "model",
+      "boundary_examples": []
+    },
+    "PASSPORT": {
+      "n": 23,
+      "teacher_exact_recall": 0.913,
+      "teacher_boundary_only": 2,
+      "teacher_f1": 0.913,
+      "student_f1": 0.64,
+      "headroom": 0.273,
+      "owner": "validator",
+      "boundary_examples": [
+        {
+          "gold": "B6169284",
+          "pred": "Passport B6169284"
+        },
+        {
+          "gold": "S5799136",
+          "pred": "passport S5799136"
+        }
+      ]
+    },
+    "LOCATION": {
+      "n": 22,
+      "teacher_exact_recall": 0.2727,
+      "teacher_boundary_only": 0,
+      "teacher_f1": 0.4138,
+      "student_f1": 0.7805,
+      "headroom": -0.3667,
+      "owner": "model",
+      "boundary_examples": []
+    },
+    "URL": {
+      "n": 21,
+      "teacher_exact_recall": 1.0,
+      "teacher_boundary_only": 0,
+      "teacher_f1": 1.0,
+      "student_f1": 1.0,
+      "headroom": 0.0,
+      "owner": "model",
+      "boundary_examples": []
+    },
+    "PASSWORD": {
+      "n": 19,
+      "teacher_exact_recall": 0.9474,
+      "teacher_boundary_only": 1,
+      "teacher_f1": 0.9474,
+      "student_f1": 0.25,
+      "headroom": 0.6974,
+      "owner": "validator",
+      "boundary_examples": [
+        {
+          "gold": "emw_2655!DC",
+          "pred": "'emw_2655!DC'"
+        }
+      ]
+    },
+    "AGE": {
+      "n": 18,
+      "teacher_exact_recall": 1.0,
+      "teacher_boundary_only": 0,
+      "teacher_f1": 1.0,
+      "student_f1": 0.6667,
+      "headroom": 0.3333,
+      "owner": "model",
+      "boundary_examples": []
+    },
+    "SSN": {
+      "n": 18,
+      "teacher_exact_recall": 1.0,
+      "teacher_boundary_only": 0,
+      "teacher_f1": 1.0,
+      "student_f1": 0.6667,
+      "headroom": 0.3333,
+      "owner": "validator",
+      "boundary_examples": []
+    },
+    "DRIVER_LICENSE": {
+      "n": 15,
+      "teacher_exact_recall": 0.5333,
+      "teacher_boundary_only": 7,
+      "teacher_f1": 0.5333,
+      "student_f1": 0.0,
+      "headroom": 0.5333,
+      "owner": "validator",
+      "boundary_examples": [
+        {
+          "gold": "IL-56506098",
+          "pred": "DL IL-56506098"
+        },
+        {
+          "gold": "KA-33950047",
+          "pred": "DL KA-33950047"
+        },
+        {
+          "gold": "NY-67014508",
+          "pred": "DL NY-67014508"
+        }
+      ]
+    }
+  },
+  "regressive_model_owned": [
+    "LOCATION"
+  ]
+}

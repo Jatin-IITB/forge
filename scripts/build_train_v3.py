@@ -57,6 +57,7 @@ from forge.carriers import (
 from forge.dedup import dedup_training_data
 from forge.inference import build_messages, parse_response
 from forge.schema import PIIRecord, PIISpan, PIIType
+from forge.teacher_client import ThrottledTeacher
 from forge.verify import verify_record
 
 # Not 42 (frozen gold), not 1337 (ADR 0009 augmentation), not 4242 (val split).
@@ -178,18 +179,17 @@ def instantiate(
 # ---------------------------------------------------------------------------
 # Track B: teacher labelling
 # ---------------------------------------------------------------------------
-def query_teacher(client, text, model, max_tokens, temperature, timeout, reasoning_effort,
+def query_teacher(teacher, text, model, max_tokens, temperature, timeout, reasoning_effort,
                   teacher_mode=False):
     messages = build_messages(text, teacher_mode=teacher_mode)
-    resp = client.chat.completions.create(
+    resp, _ = teacher.complete(
         model=model, messages=messages, max_tokens=max_tokens,
         temperature=temperature, timeout=timeout,
         extra_body={"reasoning_effort": reasoning_effort} if reasoning_effort else None,
     )
     raw = resp.choices[0].message.content or ""
     rec, valid = parse_response("tmp", text, raw, split="train")
-    tokens = resp.usage.total_tokens if resp.usage else 0
-    return rec, valid, tokens
+    return rec, valid
 
 
 def label_track_b(
@@ -205,44 +205,44 @@ def label_track_b(
         print(f"Environment variable {args.api_key_env} is not set.", file=sys.stderr)
         sys.exit(1)
 
-    client = OpenAI(base_url=args.base_url, api_key=key)
+    teacher = ThrottledTeacher(
+        OpenAI(base_url=args.base_url, api_key=key), rpm=args.rpm,
+        on_retry=lambda a, e, d: print(f"    {type(e).__name__}, retry {a} in {d:.0f}s",
+                                       flush=True),
+    )
     cache = cache_path.open("a", encoding="utf-8")
-    min_interval = 60.0 / args.rpm if args.rpm else 0.0
-    last_call = 0.0
-    calls = 0
-    tokens = 0
     t_start = time.monotonic()
+    budget_hit = False
 
     for i, rec in enumerate(pending, 1):
         samples: list[PIIRecord] = []
         flags: list[bool] = []
         errors = 0
         for _ in range(args.k):
-            if calls >= args.max_api_calls or tokens >= args.token_budget:
+            st = teacher.stats
+            if st.calls_ok >= args.max_api_calls or st.total_tokens >= args.token_budget:
+                budget_hit = True
                 break
             try:
-                if min_interval:
-                    wait = min_interval - (time.monotonic() - last_call)
-                    if wait > 0:
-                        time.sleep(wait)
-                last_call = time.monotonic()
-                s, valid, tk = query_teacher(
-                    client, rec.text, args.model, args.max_tokens,
+                s, valid = query_teacher(
+                    teacher, rec.text, args.model, args.max_tokens,
                     args.temperature, args.timeout, args.reasoning_effort,
                     teacher_mode=args.teacher_mode,
                 )
-                calls += 1
-                tokens += tk
                 samples.append(s)
                 flags.append(valid)
             except Exception as exc:  # noqa: BLE001
-                calls += 1
                 errors += 1
-                print(f"    api error: {type(exc).__name__}: {str(exc)[:120]}", flush=True)
+                print(f"    gave up on a sample: {type(exc).__name__}", flush=True)
 
+        # A record labelled with fewer than k samples has not passed the gate the
+        # ADR specifies, so it is left out of the cache entirely rather than
+        # written with weaker evidence than everything around it.
         if len(samples) < args.k:
-            print(f"  stopping early at {i - 1}/{len(pending)} "
-                  f"(calls={calls}, tokens={tokens})", flush=True)
+            reason = "budget/rate limit" if budget_hit else "teacher errors"
+            print(f"  stopping at {i - 1}/{len(pending)} ({reason}): "
+                  f"calls={teacher.stats.calls_ok} tokens={teacher.stats.total_tokens}",
+                  flush=True)
             break
 
         result = verify_record(
@@ -261,14 +261,16 @@ def label_track_b(
         }) + "\n")
         cache.flush()
 
-        rate = calls / max(1e-9, (time.monotonic() - t_start) / 60)
+        st = teacher.stats
+        rate = st.calls_ok / max(1e-9, (time.monotonic() - t_start) / 60)
         print(f"  [{i}/{len(pending)}] {rec.id}: "
               f"{'gate-ok' if result.accepted else 'gate-reject'} "
               f"({len(result.record.spans)} spans, agr={result.agreement_ratio:.2f}) "
-              f"calls={calls} tok={tokens} rpm={rate:.1f}", flush=True)
+              f"calls={st.calls_ok} tok={st.total_tokens} rpm={rate:.1f}", flush=True)
 
     cache.close()
-    print(f"\nteacher stage: {calls} calls, {tokens} tokens", flush=True)
+    print(f"\nteacher stage: {json.dumps(teacher.stats.summary())}", flush=True)
+    return teacher.stats.summary()
 
 
 # ---------------------------------------------------------------------------

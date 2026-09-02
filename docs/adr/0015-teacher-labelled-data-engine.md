@@ -58,11 +58,14 @@ same 385 records, the headroom a Track B type actually offers is teacher F1 minu
 
 | type | student F1 | teacher F1 | headroom | Track |
 |---|---|---|---|---|
-| `STREET_ADDRESS` | 0.0923 | 0.9000 | **+0.808** | B |
-| `PERSON` | 0.5000 (110 FN) | 0.9972 | **+0.497** | B |
-| `USERNAME` | 0.3881 | 1.0000 | **+0.612** | B |
-| `AGE` | 0.6667 | 1.0000 | **+0.333** | B |
-| `LOCATION` | **0.7805** | **0.4138** | **−0.367** | **A** |
+| `STREET_ADDRESS` | 0.0923 | 0.8571 | **+0.7648** | B |
+| `USERNAME` | 0.3881 | 1.0000 | **+0.6119** | B |
+| `PERSON` | 0.5000 (110 FN) | 0.9915 | **+0.4915** | B |
+| `AGE` | 0.6667 | 1.0000 | **+0.3333** | B |
+| `LOCATION` | **0.7805** | **0.4138** | **−0.3667** | **A** |
+
+*(Regenerate with `python scripts/analyse_teacher_types.py`; JSON in
+`reports/teacher_type_analysis.json`.)*
 
 `LOCATION` is the only model-owned type where distillation would be *regressive*: the student
 already scores 0.7805 against a teacher that scores 0.4138, so teaching it the teacher's

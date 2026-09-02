@@ -33,7 +33,6 @@ import json
 import os
 import random
 import sys
-import time
 from collections import Counter
 from pathlib import Path
 
@@ -41,6 +40,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from forge.carriers import Carrier, CarrierError, shape_of, validate_shape
 from forge.schema import PIIRecord, PIIType
+from forge.teacher_client import ThrottledTeacher
 
 try:
     from openai import OpenAI
@@ -185,14 +185,15 @@ def main() -> int:
     seen = {c.normalised() for c in existing}
     print(f"resuming with {len(existing)} shapes" if existing else "starting fresh")
 
-    client = OpenAI(base_url=args.base_url, api_key=key)
+    teacher = ThrottledTeacher(
+        OpenAI(base_url=args.base_url, api_key=key), rpm=args.rpm,
+        on_retry=lambda a, e, d: print(f"    {type(e).__name__}, retry {a} in {d:.0f}s",
+                                       flush=True),
+    )
     out = args.output.open("a" if existing else "w", encoding="utf-8")
 
     rejects: Counter[str] = Counter()
     calls = 0
-    total_tokens = 0
-    min_interval = 60.0 / args.rpm if args.rpm else 0.0
-    last_call = 0.0
 
     while len(seen) < args.target and calls < args.max_calls:
         register = REGISTERS[calls % len(REGISTERS)]
@@ -229,13 +230,7 @@ def main() -> int:
         prompt = USER.format(n=args.per_call, register=register, lo=lo, hi=hi,
                              emphasis=emphasis, extra=extra)
         try:
-            if min_interval:
-                wait = min_interval - (time.monotonic() - last_call)
-                if wait > 0:
-                    time.sleep(wait)
-            last_call = time.monotonic()
-            t0 = time.monotonic()
-            resp = client.chat.completions.create(
+            resp, dt = teacher.complete(
                 model=args.model,
                 messages=[{"role": "system", "content": SYSTEM},
                           {"role": "user", "content": prompt}],
@@ -244,15 +239,12 @@ def main() -> int:
                 timeout=args.timeout,
                 extra_body={"reasoning_effort": args.reasoning_effort},
             )
-            dt = time.monotonic() - t0
             calls += 1
-            if resp.usage:
-                total_tokens += resp.usage.total_tokens
             raw = resp.choices[0].message.content or ""
         except Exception as exc:  # noqa: BLE001
             calls += 1
             rejects["api_error"] += 1
-            print(f"  [call {calls}] api error: {type(exc).__name__}", flush=True)
+            print(f"  [call {calls}] gave up: {type(exc).__name__}", flush=True)
             continue
 
         try:
@@ -291,14 +283,15 @@ def main() -> int:
     out.close()
     print("\n--- carrier generation ---")
     print(f"distinct shapes: {len(seen)}  (target {args.target})")
-    print(f"api calls: {calls}, tokens: {total_tokens}")
+    print(f"teacher: {json.dumps(teacher.stats.summary())}")
     print(f"rejects: {dict(rejects)}")
 
     meta = {
         "distinct_shapes": len(seen),
         "target": args.target,
         "api_calls": calls,
-        "total_tokens": total_tokens,
+        "total_tokens": teacher.stats.total_tokens,
+        "teacher_stats": teacher.stats.summary(),
         "rejects": dict(rejects),
         "model": args.model,
         "temperature": args.temperature,

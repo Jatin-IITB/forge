@@ -34,7 +34,6 @@ import json
 import os
 import random
 import sys
-import time
 from collections import Counter
 from pathlib import Path
 
@@ -42,6 +41,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from forge.inference import build_messages, parse_response
 from forge.schema import PIIRecord, PIIType
+from forge.teacher_client import ThrottledTeacher
 
 try:
     from openai import OpenAI
@@ -102,83 +102,106 @@ def main() -> int:
     print(f"probe sample: {len(sample)} records from {args.split}")
     print(f"gold instances: {dict(gold_counts)}\n")
 
-    client = OpenAI(base_url=args.base_url, api_key=key)
-    min_interval = 60.0 / args.rpm if args.rpm else 0.0
-    last = 0.0
-    tokens = 0
+    teacher = ThrottledTeacher(
+        OpenAI(base_url=args.base_url, api_key=key), rpm=args.rpm,
+        on_retry=lambda a, e, d: print(f"    {type(e).__name__}, retry {a} in {d:.0f}s",
+                                       flush=True),
+    )
     results: dict[str, dict] = {}
+    scored: dict[str, set[str]] = {}
 
     for mode_name, teacher_mode in (("plain", False), ("teacher_mode", True)):
-        tp, fn, fp = Counter(), Counter(), Counter()
-        n_pred = 0
+        preds: dict[str, set] = {}
         for i, rec in enumerate(sample, 1):
             try:
-                if min_interval:
-                    wait = min_interval - (time.monotonic() - last)
-                    if wait > 0:
-                        time.sleep(wait)
-                last = time.monotonic()
-                resp = client.chat.completions.create(
+                resp, _ = teacher.complete(
                     model=args.model,
                     messages=build_messages(rec.text, teacher_mode=teacher_mode),
                     max_tokens=args.max_tokens, temperature=args.temperature,
                     timeout=args.timeout,
                     extra_body={"reasoning_effort": args.reasoning_effort},
                 )
-                if resp.usage:
-                    tokens += resp.usage.total_tokens
                 pred, _ = parse_response(rec.id, rec.text,
                                          resp.choices[0].message.content or "")
             except Exception as exc:  # noqa: BLE001
-                print(f"  [{mode_name} {i}/{len(sample)}] api error: {type(exc).__name__}")
+                print(f"  [{mode_name} {i}/{len(sample)}] DROPPED: {type(exc).__name__}",
+                      flush=True)
                 continue
-            n_pred += 1
-            gk = {(s.start, s.end, s.label.value) for s in rec.spans}
-            pk = {(s.start, s.end, s.label.value) for s in pred.spans}
+            preds[rec.id] = {(s.start, s.end, s.label.value) for s in pred.spans}
+            print(f"  [{mode_name} {i}/{len(sample)}] {len(pred.spans)} spans "
+                  f"(gold {len(rec.spans)})", flush=True)
+        results[mode_name] = preds
+        scored[mode_name] = set(preds)
+        print()
+
+    # Score only records BOTH arms returned. Scoring each arm against a denominator
+    # of all sampled records would understate recall by whatever fraction was
+    # dropped, and comparing two arms with different denominators is meaningless.
+    common = scored["plain"] & scored["teacher_mode"]
+    by_id = {r.id: r for r in sample}
+    common_gold = Counter(s.label.value for rid in common for s in by_id[rid].spans)
+    print("=" * 68)
+    print(f"scored in both arms: {len(common)}/{len(sample)} records "
+          f"(plain {len(scored['plain'])}, thorough {len(scored['teacher_mode'])})")
+    if len(common) < len(sample):
+        print(f"  {len(sample) - len(common)} record(s) dropped after retries; the table "
+              f"below uses only the {len(common)} common to both arms.")
+
+    def counts(mode):
+        tp, fn, fp = Counter(), Counter(), Counter()
+        for rid in common:
+            gk = {(s.start, s.end, s.label.value) for s in by_id[rid].spans}
+            pk = results[mode][rid]
             for k in gk & pk:
                 tp[k[2]] += 1
             for k in gk - pk:
                 fn[k[2]] += 1
             for k in pk - gk:
                 fp[k[2]] += 1
-            print(f"  [{mode_name} {i}/{len(sample)}] {len(pred.spans)} spans "
-                  f"(gold {len(rec.spans)})", flush=True)
+        return tp, fn, fp
 
-        results[mode_name] = {
-            "records_scored": n_pred,
-            "tp": dict(tp), "fn": dict(fn), "fp": dict(fp),
-        }
-        print()
-
-    print("=" * 68)
-    print(f"{'type':<16}{'gold':>6}{'plain R':>10}{'thorough R':>13}{'delta':>9}")
+    tallies = {m: counts(m) for m in results}
+    print(f"\n{'type':<16}{'gold':>6}{'plain R':>10}{'thorough R':>13}{'delta':>9}")
     verdict_rows = {}
     for t in WATCHED:
-        g = gold_counts.get(t.value, 0)
+        g = common_gold.get(t.value, 0)
         if not g:
             continue
-        r_plain = results["plain"]["tp"].get(t.value, 0) / g
-        r_teach = results["teacher_mode"]["tp"].get(t.value, 0) / g
+        r_plain = tallies["plain"][0].get(t.value, 0) / g
+        r_teach = tallies["teacher_mode"][0].get(t.value, 0) / g
         verdict_rows[t.value] = {"gold": g, "plain_recall": round(r_plain, 4),
                                  "teacher_mode_recall": round(r_teach, 4)}
         print(f"{t.value:<16}{g:>6}{r_plain:>10.3f}{r_teach:>13.3f}{r_teach - r_plain:>+9.3f}")
 
-    def micro(res):
-        TP = sum(res["tp"].values())
-        FP = sum(res["fp"].values())
-        FN = sum(res["fn"].values())
+    def micro(mode):
+        tp, fn, fp = tallies[mode]
+        TP, FP, FN = sum(tp.values()), sum(fp.values()), sum(fn.values())
         return 2 * TP / max(1, 2 * TP + FP + FN)
 
-    print(f"\nmicro-F1  plain={micro(results['plain']):.4f}  "
-          f"thorough={micro(results['teacher_mode']):.4f}")
-    print(f"tokens spent: {tokens}")
+    identical = sum(1 for rid in common
+                    if results["plain"][rid] == results["teacher_mode"][rid])
+    print(f"\nmicro-F1  plain={micro('plain'):.4f}  thorough={micro('teacher_mode'):.4f}")
+    print(f"records where the two prompts returned identical span sets: "
+          f"{identical}/{len(common)}")
+    print(f"tokens spent: {teacher.stats.total_tokens} "
+          f"({teacher.stats.calls_ok} ok, {teacher.stats.retries} retries, "
+          f"{teacher.stats.calls_failed} gave up)")
 
     payload = {
-        "split": str(args.split), "n_records": len(sample),
-        "gold_instances": dict(gold_counts), "per_type": verdict_rows,
-        "micro_f1": {k: round(micro(v), 4) for k, v in results.items()},
-        "raw": results, "tokens": tokens, "model": args.model,
-        "temperature": args.temperature, "seed": args.seed,
+        "split": str(args.split),
+        "n_sampled": len(sample),
+        "n_scored_both_arms": len(common),
+        "gold_instances_sampled": dict(gold_counts),
+        "gold_instances_scored": dict(common_gold),
+        "per_type": verdict_rows,
+        "micro_f1": {m: round(micro(m), 4) for m in results},
+        "identical_span_sets": identical,
+        "per_type_counts": {
+            m: {"tp": dict(t[0]), "fn": dict(t[1]), "fp": dict(t[2])}
+            for m, t in tallies.items()
+        },
+        "teacher_stats": teacher.stats.summary(),
+        "model": args.model, "temperature": args.temperature, "seed": args.seed,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
