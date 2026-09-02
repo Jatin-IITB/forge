@@ -37,8 +37,8 @@ GGUF     ?= models/pii-1.5b-gguf
 PYTHON   ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || command -v python3 || echo python)
 
 .PHONY: help install validate gold gold-sample validation infer teacher-baseline \
-        data-engine train eval economics error-analysis merge gguf report audit \
-        test lint forge clean-preds
+        data-engine carriers train-v3 train-v3-card train eval economics \
+        error-analysis merge gguf report audit test lint forge clean-preds
 
 help:
 	@echo "Forge targets:"
@@ -48,6 +48,9 @@ help:
 	@echo "  make validation       # build the clean model-selection split (seed 4242, disjointness enforced)"
 	@echo "  make teacher-baseline # score the teacher on the frozen test set (the parity bar)"
 	@echo "  make data-engine      # generate verification-gated training data from the teacher"
+	@echo "  make carriers         # WP-2 stage 1: teacher-written carrier shapes (ADR 0015)"
+	@echo "  make train-v3         # WP-2 stage 2: fill + teacher-label -> data/train_v3.jsonl"
+	@echo "  make train-v3-card    # rebuild train_v3 + its data card from cache, no API calls"
 	@echo "  make train            # LoRA SFT on verified training data"
 	@echo "  make infer            # run the student over the test set"
 	@echo "  make eval             # score PREDS against GOLD, check contract gates"
@@ -95,6 +98,33 @@ data-engine:
 		--output $(TRAIN) --model $(MODEL) --base-url $(TEACHER_URL) \
 		--api-key-env $(TEACHER_KEY_ENV) --rpm $(TEACHER_RPM) \
 		--reasoning-effort low --resume
+
+# WP-2 (ADR 0015). Two stages, because the teacher is worth paying for carrier
+# text and for labels on different types. Stage 1 is minutes; stage 2 is days of
+# background generation against a 5 rpm / 1M tok-per-day free tier, so it caches
+# per record and --resume costs nothing but re-reading a file.
+CARRIERS ?= data/carriers_v3.jsonl
+TRAIN_V3 ?= data/train_v3.jsonl
+CARRIER_TARGET ?= 400
+TRAIN_V3_TOTAL ?= 4500
+
+carriers:
+	PYTHONPATH=scripts $(PYTHON) scripts/generate_carriers.py --output $(CARRIERS) \
+		--model $(MODEL) --base-url $(TEACHER_URL) \
+		--api-key-env $(TEACHER_KEY_ENV) --rpm $(TEACHER_RPM) \
+		--target $(CARRIER_TARGET) --resume
+
+train-v3:
+	PYTHONPATH=scripts $(PYTHON) scripts/build_train_v3.py --carriers $(CARRIERS) \
+		--output $(TRAIN_V3) --model $(MODEL) --base-url $(TEACHER_URL) \
+		--api-key-env $(TEACHER_KEY_ENV) --rpm $(TEACHER_RPM) \
+		--total $(TRAIN_V3_TOTAL) --resume
+
+# Rebuild data/train_v3.jsonl and its data card from the teacher cache, with no
+# API calls. Safe to run while the labelling job is still going.
+train-v3-card:
+	PYTHONPATH=scripts $(PYTHON) scripts/build_train_v3.py --carriers $(CARRIERS) \
+		--output $(TRAIN_V3) --total $(TRAIN_V3_TOTAL) --assemble-only --resume
 
 train:
 	$(PYTHON) scripts/run_train.py --train-data $(TRAIN) --base-model $(BASE) \

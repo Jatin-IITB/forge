@@ -53,6 +53,22 @@ noise but cannot manufacture signal the teacher never produced"; a k=3 self-cons
 over three samples that each miss the city produces a confident, unanimous, *empty* label.
 The failure is silent by construction.
 
+**And on `LOCATION` the student is already better than the teacher.** Scoring both on the
+same 385 records, the headroom a Track B type actually offers is teacher F1 minus student F1:
+
+| type | student F1 | teacher F1 | headroom | Track |
+|---|---|---|---|---|
+| `STREET_ADDRESS` | 0.0923 | 0.9000 | **+0.808** | B |
+| `PERSON` | 0.5000 (110 FN) | 0.9972 | **+0.497** | B |
+| `USERNAME` | 0.3881 | 1.0000 | **+0.612** | B |
+| `AGE` | 0.6667 | 1.0000 | **+0.333** | B |
+| `LOCATION` | **0.7805** | **0.4138** | **−0.367** | **A** |
+
+`LOCATION` is the only model-owned type where distillation would be *regressive*: the student
+already scores 0.7805 against a teacher that scores 0.4138, so teaching it the teacher's
+labels would cost roughly 0.37 F1 on that type. Distillation is not uniformly an upgrade, and
+this is the row that proves it.
+
 And this is worse in training data than in evaluation. A teacher false negative that lands
 in a training set is not a scoring error — it is **a labelled example of not detecting an
 entity**. The student's diagnosed failure is precisely under-enumeration (span ratio
