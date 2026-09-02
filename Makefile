@@ -48,6 +48,7 @@ help:
 	@echo "  make merge            # fold the LoRA adapter into the base model"
 	@echo "  make gguf             # quantize the merged model for offline use"
 	@echo "  make report           # regenerate the technical report PDF from measured artifacts"
+	@echo "  make audit            # mechanical checks on the frozen gold bytes (offsets, dupes, leakage)"
 	@echo "  make test / lint"
 	@echo ""
 	@echo "  make forge            # END-TO-END rebuild (teacher bar -> data -> train -> gates)"
@@ -114,6 +115,14 @@ report:
 
 test:
 	$(PYTHON) -m pytest -q
+
+# Mechanical checks on the committed gold bytes: offset exactness, span
+# disjointness, duplicates, and train/gold leakage. Distinct from `test`,
+# which can pass while the data itself is wrong — the ADR 0011 clock defect
+# survived a green suite because every test regenerated the data identically.
+# NOT human verification (PROTOCOL.md section 5), and must not be called that.
+audit:
+	$(PYTHON) scripts/audit_gold.py
 
 lint:
 	$(PYTHON) -m ruff check forge scripts tests

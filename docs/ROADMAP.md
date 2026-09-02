@@ -200,8 +200,21 @@ rates, leakage = 0, and an explicit license clearance line per source.
 `run_003` proved r=64 overfits at 837 records. At ~4,500 records that conclusion does not
 transfer, so the setting must be re-derived rather than assumed.
 
-Sweep r ∈ {16, 32, 64} × MLP {on, off}, **on dev only**. The frozen test set is not touched
-until one config is chosen.
+> **⚠ Blocked on a defect found 2026-09-03: there is currently no usable validation split.**
+> `scripts/audit_gold.py` shows **150 of 189 dev records (79.4%) appear verbatim in
+> `data/train.jsonl`** — the data engine was seeded from dev, and the dedup pass
+> (`forge/dedup.py`) was given the *test* split to check against, so dev leakage was never
+> caught. Model selection on dev would be scoring memorised training text and would silently
+> pick the most overfit configuration.
+>
+> **Fix before WP-3 runs:** generate a fresh held-out validation split from the deterministic
+> builder under a new seed, verified disjoint from both `train.jsonl` and `test.jsonl`. This
+> is free, touches nothing frozen, and is the only option that preserves the test freeze —
+> the 39 uncontaminated dev records are too few to select on, and carving a slice out of test
+> would break the freeze. Track as **WP-0d**.
+
+Sweep r ∈ {16, 32, 64} × MLP {on, off}, **on the new clean validation split only**. The
+frozen test set is not touched until one config is chosen.
 
 **Pre-registered predictions** (recorded before the run, per ADR 0013 discipline — the
 conjunction is what makes it falsifiable):

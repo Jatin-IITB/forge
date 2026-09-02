@@ -57,7 +57,7 @@ class Interval:
         return (self.hi - self.lo) / 2
 
     def __str__(self) -> str:
-        pct = int(round((1 - self.alpha) * 100))
+        pct = round((1 - self.alpha) * 100)
         return f"{self.point:.4f} [{self.lo:.4f}, {self.hi:.4f}] {pct}% CI"
 
 
