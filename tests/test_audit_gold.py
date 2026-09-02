@@ -42,6 +42,14 @@ def train_texts() -> set[str]:
     return {r.text for r in _load(TRAIN)} if TRAIN.exists() else set()
 
 
+@pytest.fixture(scope="module")
+def val_split() -> list[PIIRecord]:
+    path = GOLD / "val.jsonl"
+    if not path.exists():
+        pytest.skip("validation split not built yet (scripts/build_validation.py)")
+    return _load(path)
+
+
 class TestFrozenTestSplit:
     """The test split carries every published number. It must stay clean."""
 
@@ -85,6 +93,45 @@ class TestFrozenTestSplit:
         """
         unique = {r.text for r in test_split}
         assert len(test_split) - len(unique) == 20
+
+
+class TestValidationSplit:
+    """The clean model-selection split (WP-0d), built by build_validation.py.
+
+    Its whole purpose is being disjoint from everything else, so that is what
+    gets asserted — on the committed bytes, every run.
+    """
+
+    def test_disjoint_from_training_data(self, val_split, train_texts):
+        if not train_texts:
+            pytest.skip("no training data present")
+        leaked = [r.id for r in val_split if r.text in train_texts]
+        assert leaked == [], f"{len(leaked)} val records leaked from training data"
+
+    def test_disjoint_from_the_frozen_test_set(self, val_split, test_split):
+        """Selecting on text that also scores the final number would be circular."""
+        test_texts = {r.text for r in test_split}
+        overlap = [r.id for r in val_split if r.text in test_texts]
+        assert overlap == [], f"{len(overlap)} val records also appear in test"
+
+    def test_disjoint_from_dev(self, val_split, dev_split):
+        dev_texts = {r.text for r in dev_split}
+        overlap = [r.id for r in val_split if r.text in dev_texts]
+        assert overlap == [], f"{len(overlap)} val records also appear in dev"
+
+    def test_has_no_internal_duplicates(self, val_split):
+        assert len(val_split) == len({r.text for r in val_split})
+
+    def test_covers_every_high_severity_type_more_densely_than_test(self, val_split, test_split):
+        """Model selection needs at least the resolution of the final measurement."""
+        from collections import Counter
+
+        from forge.schema import HIGH_SEVERITY
+
+        v = Counter(s.label.value for r in val_split for s in r.spans)
+        t = Counter(s.label.value for r in test_split for s in r.spans)
+        for label in sorted(x.value for x in HIGH_SEVERITY):
+            assert v[label] >= t[label], f"{label}: val has {v[label]} vs test {t[label]}"
 
 
 class TestDevSplit:

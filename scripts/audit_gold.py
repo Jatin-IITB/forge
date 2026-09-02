@@ -155,12 +155,16 @@ def audit_leakage(train_path: Path, gold: dict[str, list[PIIRecord]], a: Audit) 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--gold-dir", type=Path, default=Path("data/gold"))
-    ap.add_argument("--split", choices=["dev", "test", "both"], default="both")
+    ap.add_argument("--split", choices=["dev", "val", "test", "all"], default="all")
     ap.add_argument("--train", type=Path, default=Path("data/train.jsonl"))
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
 
-    splits = ["dev", "test"] if args.split == "both" else [args.split]
+    # "val" is skipped silently when absent so this still runs on a clone that
+    # predates WP-0d; every other named split missing is an error.
+    splits = ["dev", "val", "test"] if args.split == "all" else [args.split]
+    if args.split == "all" and not (args.gold_dir / "val.jsonl").exists():
+        splits.remove("val")
     a = Audit()
     gold: dict[str, list[PIIRecord]] = {}
     stats: dict[str, dict] = {}

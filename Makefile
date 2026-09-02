@@ -9,6 +9,12 @@ DEV      ?= data/gold/dev.jsonl
 PREDS    ?= data/predictions_student.jsonl
 TEACHER_PREDS ?= data/predictions_teacher.jsonl
 TRAIN    ?= data/train_v2.jsonl
+# WARNING (WP-0d): seeding the data engine from a gold split is what
+# contaminated dev — 150 of its 189 records now appear verbatim in
+# data/train.jsonl, making dev unusable for model selection. The dedup pass
+# was checking leakage against *test*, so it never noticed. WP-2 replaces this
+# with carrier text that belongs to no evaluation split. Until then, note that
+# anything trained from these seeds may only be selected on data/gold/val.jsonl.
 SEEDS    ?= data/gold/dev.jsonl
 RUN      ?= run_002
 
@@ -30,14 +36,16 @@ GGUF     ?= models/pii-1.5b-gguf
 # `make forge` reproducibility claim.
 PYTHON   ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || command -v python3 || echo python)
 
-.PHONY: help install validate gold gold-sample infer teacher-baseline data-engine \
-        train eval economics error-analysis merge gguf report test lint forge clean-preds
+.PHONY: help install validate gold gold-sample validation infer teacher-baseline \
+        data-engine train eval economics error-analysis merge gguf report audit \
+        test lint forge clean-preds
 
 help:
 	@echo "Forge targets:"
 	@echo "  make install          # editable install + dev deps"
 	@echo "  make validate         # validate the TaskContract + sample gold against the schema"
 	@echo "  make gold             # (re)build the frozen gold dev/test sets (Faker, seed 42)"
+	@echo "  make validation       # build the clean model-selection split (seed 4242, disjointness enforced)"
 	@echo "  make teacher-baseline # score the teacher on the frozen test set (the parity bar)"
 	@echo "  make data-engine      # generate verification-gated training data from the teacher"
 	@echo "  make train            # LoRA SFT on verified training data"
@@ -68,6 +76,12 @@ gold:
 
 gold-sample:
 	$(PYTHON) scripts/make_sample_gold.py
+
+# The clean model-selection split. dev cannot be used for it — 79% of dev
+# appears verbatim in train.jsonl (WP-0d), so selecting on dev scores
+# memorised text. Refuses to write unless disjoint from train, dev and test.
+validation:
+	PYTHONPATH=scripts $(PYTHON) scripts/build_validation.py
 
 # The parity denominator. Must exist before any student claim means anything.
 teacher-baseline:

@@ -106,7 +106,11 @@ class PIIRecord(BaseModel):
         default="synthetic:faker",
         description="Provenance tag, e.g. 'synthetic:faker' or 'public:enron'.",
     )
-    split: str = Field(default="test", pattern="^(dev|test|train)$")
+    # "val" is the clean model-selection split built by scripts/build_validation.py.
+    # It exists because dev is 79% contaminated by training data (WP-0d) and so
+    # cannot be selected on. Widening this pattern is backward-compatible: every
+    # previously committed record still validates.
+    split: str = Field(default="test", pattern="^(dev|val|test|train)$")
 
     @model_validator(mode="after")
     def _check_spans(self) -> PIIRecord:
