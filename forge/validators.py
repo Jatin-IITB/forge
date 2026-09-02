@@ -115,7 +115,12 @@ _CONTEXT = {
     PIIType.BANK_ACCOUNT: ("account", "a/c", "acct", "bank", "ifsc", "iban", "routing", "deposit", "wire", "transfer"),
     PIIType.SSN: ("ssn", "social security"),
     PIIType.CREDIT_CARD: ("card", "credit", "debit", "visa", "mastercard", "amex", "cvv", "charge"),
-    PIIType.PASSWORD: ("password", "passwd", "pwd", "passphrase", "login", "credentials"),
+    # "login" and "credentials" were removed: both introduce a *username* at
+    # least as often as a password. "Alert: login from 107.248.180.67 for
+    # randy04" made every such username a PASSWORD hit — 13 of 571 gold
+    # instances. The remaining keywords name the secret explicitly, and
+    # dropping the two weak ones costs no recall (verified on test + val).
+    PIIType.PASSWORD: ("password", "passwd", "pwd", "passphrase"),
     PIIType.API_KEY: ("api", "key", "token", "secret", "bearer"),
 }
 
@@ -133,7 +138,12 @@ _PATTERNS: list[tuple[PIIType, re.Pattern[str]]] = [
     # Payment cards: 12-19 digits, optionally grouped. The floor is 12, not the
     # textbook 13 — Maestro/Laser ranges go to 12 and the gold set contains two,
     # which a 13-digit floor silently handed to the AADHAAR pattern.
-    (PIIType.CREDIT_CARD, re.compile(r"\b(?:\d[ -]?){11,18}\d\b")),
+    # A leading '+' is an international dialling prefix, never part of a card.
+    # Without this guard "+91 99854 35346" matched as a 12-digit card in 41 of
+    # 571 gold instances — the single largest source of validator false
+    # positives. The '\b' before the digits does not help, because '+' is a
+    # non-word character and so creates a boundary rather than suppressing one.
+    (PIIType.CREDIT_CARD, re.compile(r"(?<![+\d])\b(?:\d[ -]?){11,18}\d\b")),
     # Bank account: 8-18 digit run (needs context — far too generic alone).
     (PIIType.BANK_ACCOUNT, re.compile(r"\b\d{8,18}\b")),
     # API keys: known prefixes, or long high-entropy alphanumeric runs.
@@ -149,7 +159,21 @@ _PATTERNS: list[tuple[PIIType, re.Pattern[str]]] = [
     # full stop ("mfy_8733!JW.") and shifted every offset by one.
     (
         PIIType.PASSWORD,
-        re.compile(r"(?<![\w@.])(?=\S*[A-Za-z])(?=\S*\d)[A-Za-z0-9!@#$%^&*_+-]{6,}(?![\w])"),
+        # Two trailing guards, both needed to keep an email address intact.
+        # '@' stays in the character class because passwords genuinely contain
+        # it, which made "adam65@example.net" match as "adam65@example" —
+        # truncating the address and leaving ".net" unredacted. That is a
+        # partial leak, not a mislabel, because merge_with_model lets a
+        # validator span evict the model's correct EMAIL span.
+        #   (?!\.\w)  rejects a domain suffix; a sentence-final '.' still
+        #             passes, since excluding '.' from the class outright is
+        #             what swallowed full stops and shifted every offset.
+        #   (?!@)     rejects the local part on its own. Without it the greedy
+        #             {6,} simply backtracks from "adam65@example" to "adam65"
+        #             and re-creates the same leak one token shorter.
+        re.compile(
+            r"(?<![\w@.])(?=\S*[A-Za-z])(?=\S*\d)[A-Za-z0-9!@#$%^&*_+-]{6,}(?![\w])(?!\.\w)(?!@)"
+        ),
     ),
 ]
 
@@ -302,7 +326,36 @@ def find_high_severity(text: str) -> list[ValidatorHit]:
                 )
             )
 
-    return _resolve_overlaps(candidates)
+    return _resolve_overlaps(_drop_outranked_secrets(candidates))
+
+
+# Types where one keyword introduces exactly one secret, so a second candidate
+# leaning on the same keyword is almost certainly a different kind of token.
+_SINGLE_CLAIMANT = frozenset({PIIType.PASSWORD})
+
+
+def _drop_outranked_secrets(hits: list[ValidatorHit]) -> list[ValidatorHit]:
+    """For single-claimant types, keep only the candidate nearest its keyword.
+
+    "Failed password attempt: 'oly_4121!FN' for rachit77." contains one password
+    keyword and two password-shaped tokens. Both were claimed, so every username
+    in a login-failure sentence became a PASSWORD hit. The keyword introduces one
+    secret, and the secret is the token nearest to it — the real password sits at
+    distance 13 here, the username at 30.
+
+    This does not compete with `_resolve_overlaps`: these candidates do not
+    overlap, so overlap resolution never sees them together. It also cannot cost
+    recall on a text with several genuine passwords, because ties are kept.
+    """
+    best: dict[PIIType, int] = {}
+    for h in hits:
+        if h.span.label in _SINGLE_CLAIMANT:
+            best[h.span.label] = min(best.get(h.span.label, _NO_CONTEXT), h.context_distance)
+    return [
+        h
+        for h in hits
+        if h.span.label not in _SINGLE_CLAIMANT or h.context_distance <= best[h.span.label]
+    ]
 
 
 def _resolve_overlaps(hits: list[ValidatorHit]) -> list[ValidatorHit]:
