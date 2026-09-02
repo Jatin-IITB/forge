@@ -42,6 +42,62 @@ def load_records(path: Path) -> list[PIIRecord]:
     return records
 
 
+def _print_ci_block(gold, preds, system_report, args) -> None:
+    """95% bootstrap intervals for the gate quantities (contract v2 requires them).
+
+    Two things here are deliberate and easy to get wrong:
+
+    * The G1 ratio is bootstrapped **paired** — one resample scores both models,
+      because both are measured on the same frozen records. Dividing two
+      independent intervals reports ~28% more uncertainty than the data holds.
+    * A high-severity type with zero misses gets the Clopper-Pearson bound, not
+      the bootstrap. With nothing to resample the bootstrap returns [1.0, 1.0],
+      which reads as certainty when it only means the sample had no errors.
+    """
+    from forge.ci import micro_f1_ci, paired_ratio_ci, zero_failure_recall_bound
+
+    n = args.ci_resamples
+    print()
+    print("=" * 62)
+    print(f"  95% BOOTSTRAP CONFIDENCE INTERVALS  (n={n:,} resamples, record-level)")
+    print("=" * 62)
+
+    f1 = micro_f1_ci(gold, preds, n_resamples=n)
+    print(f"  {'model-only micro-F1':<26}{f1}")
+
+    if args.teacher_preds:
+        teacher = load_records(args.teacher_preds)
+        ratio = paired_ratio_ci(gold, preds, teacher, n_resamples=n)
+        print(f"  {'G1 ratio (paired)':<26}{ratio}")
+        verdict = "PASS" if ratio.lo >= 0.98 else "FAIL"
+        qual = "" if (ratio.hi < 0.98 or ratio.lo >= 0.98) else "  (interval straddles the gate)"
+        print(f"  {'G1 vs 0.98 threshold':<26}{verdict}{qual}")
+
+    if system_report is not None:
+        print()
+        print("  High-severity recall — zero-miss types use the exact binomial")
+        print("  lower bound; the bootstrap is degenerate when nothing was missed.")
+        print(f"  {'type':<18}{'n':>5}{'recall':>9}{'95% lower bound':>18}")
+        print(f"  {'-' * 50}")
+        tot_n = tot_miss = 0
+        for label in sorted(system_report.high_severity_recall()):
+            m = system_report.per_type.get(label)
+            if m is None:
+                continue
+            n_gold, miss = m.tp + m.fn, m.fn
+            tot_n += n_gold
+            tot_miss += miss
+            lb = f"{zero_failure_recall_bound(n_gold):>18.4f}" if miss == 0 else f"{'(has misses)':>18}"
+            print(f"  {label:<18}{n_gold:>5}{m.recall:>9.4f}{lb}")
+        if tot_miss == 0 and tot_n:
+            print(f"  {'-' * 50}")
+            print(f"  {'POOLED':<18}{tot_n:>5}{1.0:>9.4f}{zero_failure_recall_bound(tot_n):>18.4f}")
+            print()
+            print(f"  Publishable claim: >={zero_failure_recall_bound(tot_n) * 100:.1f}% recall "
+                  f"on the {len(system_report.high_severity_recall())} high-severity types.")
+            print("  The point estimate is 1.0000; the sample supports the bound.")
+
+
 def check_gates(report, contract, teacher_f1: float | None) -> list[str]:
     """Check measurable gates. Returns list of failure descriptions."""
     failures = []
@@ -101,6 +157,25 @@ def main() -> int:
             "Apply the deterministic high-severity validators (ADR 0012) and report "
             "model-only, validator-only and system numbers together"
         ),
+    )
+    ap.add_argument(
+        "--ci", action="store_true",
+        help=(
+            "Report 95%% bootstrap confidence intervals (contract v2 requires them). "
+            "Resamples records, not spans; the G1 ratio uses a paired resample"
+        ),
+    )
+    ap.add_argument(
+        "--teacher-preds", type=Path, default=None,
+        help=(
+            "Teacher predictions on the same gold set. With --ci this enables the "
+            "paired ratio CI for G1, which is tighter and more correct than "
+            "dividing two independent intervals"
+        ),
+    )
+    ap.add_argument(
+        "--ci-resamples", type=int, default=10_000,
+        help="Bootstrap resamples (default 10000)",
     )
     args = ap.parse_args()
 
@@ -212,6 +287,9 @@ def main() -> int:
             print(f"  {len(sys_hs) - below}/{len(sys_hs)} high-severity floors pass under the system.")
             print("  G1 parity is measured on model-only; the validator layer")
             print("  carries the high-severity floor.")
+
+        if args.ci:
+            _print_ci_block(gold, preds, system_report, args)
 
     if args.check_gates:
         contract = load_contract(args.contract)

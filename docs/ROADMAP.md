@@ -75,12 +75,36 @@ Three numbers currently in the repo are not yet defensible, and two of them make
 **easier** than they should be. Fixing them before optimising against them is the only
 honest order.
 
-1. **Teacher p95 is contaminated by the free tier.** Measured p50 = 0.586 s, p95 = 8.02 s — a
-   13.7× spread that is the signature of rate-limit stalls at 5 req/min, not model latency.
-   G4's target (≤ 1.60 s) is generous for an artifactual reason. Re-measure with the throttle
-   removed, or publish p95 alongside an explicit "includes free-tier queueing" caveat and
-   gate on the clean number.
-   **Expect the target to tighten from ~1.60 s to ~0.5 s.** Better to learn that now.
+1. **Teacher p95 is not reproducible.** *(Mechanism corrected 2026-09-03 — see below.)*
+   Two runs of the **identical configuration** — same model, endpoint, `reasoning_effort`,
+   and 5 rpm throttle — disagree by 10× on p95:
+
+   | Artifact | n | p50 | **p95** | mean | max |
+   |---|---|---|---|---|---|
+   | `teacher_token_sample.meta.json` | 60 | 0.507 | **0.790** | 0.546 | 1.367 |
+   | `predictions_teacher_120b_test.meta.json` | 302 | 0.586 | **8.024** | 2.608 | — |
+
+   The p50s agree to within 14%; the p95s differ by an order of magnitude. The 60-record
+   sample contains no call slower than 1.37 s. Solving the longer run's mean against its
+   median implies **≈15% of its calls took ~14 s** — episodic server-side congestion on
+   shared free-tier capacity during a ~77-minute run, absent from the ~12-minute one.
+
+   **The original hypothesis in this document was wrong.** It claimed the tail was
+   client-side rate-limit stalling folded into the timer. Reading `run_inference.py`
+   disproves that: `t0` is set *after* the throttle sleep and is reset on every retry
+   attempt, and only successful attempts append to `latencies`. Throttle and backoff were
+   already correctly excluded — the docstring's claim holds. The tail is real latency
+   that really happened; it just is not a stable property of the teacher.
+
+   A gate threshold defined as `teacher_p95 / 5` inherits that instability. **If the clean
+   p95 is ~0.8 s, G4's target is ≤ 0.16 s — ten times harder than the ≤ 1.60 s this
+   document originally assumed.** Re-measurement is running; the verdict follows the number.
+
+   *Contributing cause:* the 302-record run predates the `latencies_s` field, so its
+   percentiles were computed from whichever resumed segment ran last rather than the pooled
+   distribution (`run_inference.py:310-312` was added to fix exactly this). Its p95 is
+   therefore both unstable **and** computed from a truncated slice, and cannot be audited
+   after the fact because the per-call vector was never stored.
 2. **No confidence intervals.** The contract says "all measured with 95% CIs"; none of the
    published numbers carry one. Add bootstrap CIs (n=10,000) to F1, recall, and per-type
    scores. On 385 records a ±0.05 CI on F1 is expected, which matters for a 0.98× gate.
@@ -277,7 +301,8 @@ wrong is wasted work.
 
 | Risk | Likelihood | Impact | Mitigation / kill criterion |
 |---|---|---|---|
-| Corrected teacher p95 makes G4 unreachable | **high** | G4 permanently fails | Publish both conditions; if the clean target is unreachable, amend the claim to the measured multiple. The covenant already requires this. |
+| Corrected teacher p95 makes G4 unreachable | **high — now evidenced** | G4 permanently fails | A clean teacher p95 of ~0.8 s puts the target at **≤ 0.16 s**, requiring ~660 output tok/s single-stream from a 1.5B. Publish both conditions; if the clean target is unreachable, amend the claim to the measured multiple. The covenant already requires this. |
+| Gate thresholds defined *relative to* an unstable teacher measurement | **high** | any of G1/G3/G4 silently mis-set | G1/G3/G4 are all `teacher_X × k`. The teacher side needs a CI and a stated measurement condition, or the gates inherit its noise. WP-0 fixes this for latency; check F1 and cost the same way. |
 | 12× throughput not reached | medium | G3 fails | Ladder in WP-1 has 4 independent levers; measure after each. If stuck ≥0.3×, report the honest multiple. |
 | Q4_K_M costs >0.01 F1 | medium | quantization can't ship | Fall back to Q8_0; report the larger artifact. |
 | Parity still short after WP-2/3 | **high** | G1 fails | This is the real research risk. A 0.354 gap is large. Fallback: report the hybrid **system** score (validators + model) as the product number, with model-only reported separately and never conflated. |
