@@ -182,6 +182,57 @@ filtered-for — and is still asserted, on the written bytes, against all four o
 **D. More of the same construction data.** ADR 0009 already ran that experiment: 150 → 837
 records bought +0.03 F1. Rejected by measurement.
 
+## Two things found while building, before any data was generated
+
+**The design was nearly derived from a prompt the engine would not have used.** The table
+above comes from `data/predictions_teacher_120b_test.jsonl`, which `run_inference.py`
+produced with the **plain** system prompt. But `run_data_engine.py` — which the new
+labeller was copied from — labels with `TEACHER_SYSTEM_PROMPT`, a different prompt that adds
+*"Be thorough — missing a PII entity is worse than a false positive"* and asks for a
+rationale per span. That instruction targets recall, which is the exact axis `LOCATION`
+fails on, so the entire Track A/B split may have been derived from a distribution the
+engine was not going to generate from.
+
+`scripts/probe_teacher_prompt.py` settled it on 16 `val` records (never `test` — choosing a
+configuration by looking at the frozen split is what the gate discipline exists to prevent),
+both prompts, same records, temperature 0:
+
+| type | n | plain recall | "be thorough" recall |
+|---|---|---|---|
+| `LOCATION` | 10 | 0.100 | **0.100** |
+| `PERSON` | 8 | 1.000 | 1.000 |
+| `AGE` | 2 | 1.000 | 1.000 |
+| `USERNAME` | 1 | 1.000 | 1.000 |
+
+15 of 16 records returned **byte-identical span sets**. The blind spot is a property of the
+teacher, not of how it is asked: telling it to be thorough moved `LOCATION` by nothing, and
+0.100 on `val` is *worse* than the 0.273 on `test` that motivated the routing. P2's premise
+holds, and `LOCATION` stays in Track A.
+
+The single differing record is instructive. The whole micro-F1 gap (0.7541 → 0.8525) sits on
+`AADHAAR`, `PAN` and `PASSPORT`, where the plain prompt included the label prefix — `"PAN
+MSRPE0506C"` for gold `"MSRPE0506C"` — and the thorough prompt did not. **Those are exactly
+the types the construction anchor overrides.** So the prompt choice cannot affect a single
+label this engine keeps, and the engine uses the plain prompt: identical where it matters,
+matched to the measurement, and cheaper.
+
+**Prompting alone does not keep literal PII out of carriers.** The first 21 generated shapes
+included ten chat transcripts with literal speaker names — `"Alice: Could you send the
+report to {{PERSON}}?"` — despite an explicit instruction not to write PII values. Every
+Track A record built from that shape would contain `Alice` as an **unlabelled** `PERSON`:
+a training example asserting that a name is not PII, which is precisely the
+under-enumeration the student already fails at. Track B would have partly self-corrected
+(the teacher finds the name, the anchor keeps it as a discovery), so the defect would have
+been *invisible in Track B metrics while silently poisoning Track A*.
+
+Carriers are now screened rather than merely requested: literal emails, URLs, IPs and long
+digit runs by regex, and given names against the ~1,250-name Faker corpus that fills the
+placeholders — same provenance as the injected values, so the screen and the fill cannot
+disagree. Sentence-initial matches are exempt so that `Will`, `May` and `Grace` as ordinary
+words do not cost good carriers. The screen refuses to run if the name set comes back small,
+because a screen that silently passes everything is worse than no screen — the first version
+of it returned zero names and cleared all ten bad shapes.
+
 ## Predictions, recorded before the run
 
 Per ADR 0013's process lesson — a single-number prediction would have read as a clean
@@ -216,8 +267,13 @@ claiming it now would be the post-hoc gate-setting `SUCCESS.md` forbids.
 
 ## Consequences
 
-- New module `forge/carriers.py` (pure, 21 unit tests) and two scripts. `run_data_engine.py`
-  is left untouched so `make data-engine` still reproduces the historical v1/v2 path.
+- New modules `forge/carriers.py` (pure, 31 unit tests) and `forge/teacher_client.py`
+  (throttle + retry, 9 unit tests), plus three scripts. `run_data_engine.py` is left
+  untouched so `make data-engine` still reproduces the historical v1/v2 path.
+- `forge/teacher_client.py` exists because a 5 rpm client with no retry was measured
+  **dropping half its calls** against this tier while another client was active. A dropped
+  call is a missing sample, not a visible error, so every teacher-facing script now shares
+  one throttle-and-retry path with the latency timer outside both sleeps (ADR 0014 §4).
 - The corpus is regenerable end-to-end from two commands and three seeds, by a stranger, with
   no private credential — the ADR 0003 litmus, applied to the training data for the first time.
 - Cost: ~600 tok/record for carriers plus k=3 labelling on Track B, against a 5 req/min,

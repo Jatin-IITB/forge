@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 
 from forge.schema import HIGH_SEVERITY, PIIRecord, PIISpan, PIIType
 
@@ -58,6 +59,83 @@ TRACK_B_FOCUS: frozenset[PIIType] = frozenset(
 MIN_CARRIER_CHARS = 25
 MAX_CARRIER_CHARS = 600
 MAX_PLACEHOLDERS = 12
+
+# Literal PII written into the carrier instead of a placeholder is the one defect
+# this module cannot tolerate: the value ends up in the text with **no span**, so
+# the record teaches the model that this entity is not PII. That is the student's
+# diagnosed failure mode (under-enumeration) injected directly into the labels.
+#
+# Observed in the first 21 generated shapes: the teacher wrote chat transcripts
+# with literal speaker names -- "Alice: Could you send the report to {{PERSON}}?"
+# -- so "Alice" would have been an unlabelled PERSON in every Track A record built
+# from that shape. Prompting alone did not prevent it; these checks do.
+_LITERAL_PII = (
+    ("an email address", re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")),
+    ("a URL", re.compile(r"https?://\S+|\bwww\.\S+\.\w{2,}")),
+    ("an IP address", re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\b")),
+    ("a long digit run", re.compile(r"\b\d{7,}\b")),
+    ("a digit-grouped identifier", re.compile(r"\b\d{3,}[ -]\d{3,}[ -]\d{3,}\b")),
+)
+
+# A speaker prefix at the start of a line: "Alice:", "Dr Rao:". Matched
+# separately from prose because it is the highest-frequency failure and is
+# unambiguous -- a line-initial capitalised token before a colon in a transcript
+# is a name unless it is a form field label.
+_SPEAKER_RE = re.compile(r"^[ \t]*([A-Z][a-zA-Z]{1,15})[ \t]*:", re.MULTILINE)
+
+# Field labels that legitimately start a line with "Word:" in forms, logs and
+# tickets. Anything outside this set is treated as a speaker name.
+_FIELD_LABELS = frozenset(
+    # Kept as prose and split rather than a 100-element list literal: this is a
+    # word list, and it is reviewed by reading it.
+    """name email phone address status subject from to date time ref reference note notes
+    update alert error warning info priority category location customer agent account order
+    ticket case id user username summary details description type severity source target
+    department team assignee reporter due created modified resolution comment attachment
+    subject line amount total balance due invoice product quantity sku carrier tracking
+    origin destination eta requested completed reviewed approved owner region branch
+    manager supervisor caller patient doctor nurse driver client tech support admin
+    operator dispatcher technician rep lead host guest sender recipient staff teacher
+    student engineer analyst officer reviewer applicant candidate landlord tenant buyer
+    seller vendor courier     receptionist pharmacist attendant respondent witness observer
+    aadhaar pan passport ssn dob otp upi ifsc pin cvv card licence license permit visa
+    tin gst nid mobile telephone fax website url ip host port env node service
+    """.split()  # noqa: SIM905 - a word list, reviewed by reading it
+)
+
+
+@lru_cache(maxsize=1)
+def known_given_names() -> frozenset[str]:
+    """Given names from the same Faker locales that fill the placeholders.
+
+    Same provenance as the injected values, so the screen and the fill cannot
+    disagree about what counts as a name. Faker is imported lazily to keep this
+    module free of an import-time dependency on it.
+
+    Two-letter names are dropped — they collide with initials and ordinary words
+    far more often than they catch a real leak.
+    """
+    import importlib
+
+    names: set[str] = set()
+    for locale in ("en_US", "en_GB", "en_IN"):
+        provider = importlib.import_module(f"faker.providers.person.{locale}").Provider
+        for attr in ("first_names", "first_names_male", "first_names_female",
+                     "first_names_nonbinary"):
+            value = getattr(provider, attr, None)
+            if not isinstance(value, (tuple, list, dict, set, frozenset)):
+                continue  # some locales expose these as methods, not data
+            names.update(n.lower() for n in value if len(n) > 2 and n.isalpha())
+
+    # An empty screen is worse than no screen: it looks like it ran. The first
+    # version of this pulled the wrong provider, returned zero names, and cleared
+    # every carrier that contained a literal name.
+    if len(names) < 500:
+        raise RuntimeError(
+            f"given-name screen collapsed to {len(names)} names; refusing to run with a "
+            "screen that would silently pass literal names"
+        )
+    return frozenset(names)
 
 
 class CarrierError(ValueError):
@@ -107,7 +185,38 @@ def shape_of(record: PIIRecord) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def validate_shape(shape: str) -> Carrier:
+def literal_pii_issue(shape: str, known_names: frozenset[str] | None = None) -> str | None:
+    """Describe the first piece of literal PII in a shape, or None if it is clean.
+
+    ``known_names`` is a set of lowercased given names (built from Faker in
+    `scripts/generate_carriers.py`, so the check has the same provenance as the
+    values that will be injected). It is optional so this module keeps no
+    import-time dependency on Faker.
+    """
+    for what, pattern in _LITERAL_PII:
+        m = pattern.search(PLACEHOLDER_RE.sub("", shape))
+        if m:
+            return f"literal PII in carrier: {what} ({m.group(0)[:32]!r})"
+
+    for m in _SPEAKER_RE.finditer(shape):
+        word = m.group(1)
+        if word.lower() in _FIELD_LABELS:
+            continue
+        if known_names is None or word.lower() in known_names:
+            return f"literal PII in carrier: speaker name ({word!r})"
+
+    if known_names:
+        # A known given name capitalised mid-sentence is a name, not a sentence
+        # start. Restricting to mid-sentence keeps ordinary words that happen to
+        # be names ("Will", "May", "Grace") from tripping the check when they open
+        # a sentence.
+        for m in re.finditer(r"(?<![.!?\n]\s)(?<!^)\b([A-Z][a-z]{2,15})\b", shape):
+            if m.group(1).lower() in known_names:
+                return f"literal PII in carrier: given name ({m.group(1)!r})"
+    return None
+
+
+def validate_shape(shape: str, known_names: frozenset[str] | None = None) -> Carrier:
     """Parse and check one carrier shape, raising ``CarrierError`` on anything unsafe.
 
     The checks exist because the shape comes from a language model, and a malformed
@@ -146,6 +255,10 @@ def validate_shape(shape: str) -> Carrier:
     # entities unrecoverable ("{{PERSON}}{{PHONE}}" -> "Jane Doe+1 555-...").
     if re.search(r"\}\}\s*\{\{", shape):
         raise CarrierError("adjacent placeholders leave an ambiguous boundary")
+
+    issue = literal_pii_issue(shape, known_names)
+    if issue:
+        raise CarrierError(issue)
 
     return Carrier(shape=shape, source="unknown")
 

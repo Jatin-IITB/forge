@@ -73,6 +73,71 @@ def test_placeholder_cap():
 
 
 # ---------------------------------------------------------------------------
+# Literal PII in the carrier — the defect that produces silently unlabelled spans
+# ---------------------------------------------------------------------------
+NAMES = frozenset({"alice", "bob", "carol", "priya", "sam", "grace", "will"})
+
+
+def test_rejects_literal_speaker_names_from_a_chat_transcript():
+    """The exact shape the teacher produced on the first generation run.
+
+    'Alice' would have been an unlabelled PERSON in every Track A record built
+    from it — a training example asserting that a name is not PII.
+    """
+    shape = ("Alice: Could you send the report to {{PERSON}} before the deadline?\n"
+             "Bob: Sure, I will copy {{PERSON}} on the email.")
+    with pytest.raises(CarrierError, match="speaker name"):
+        validate_shape(shape, known_names=NAMES)
+
+
+def test_allows_field_labels_that_look_like_speakers():
+    shape = "Status: escalated\nCustomer: {{PERSON}}\nAccount: {{USERNAME}}\nRegion: {{LOCATION}}"
+    c = validate_shape(shape, known_names=NAMES)
+    assert c.slot_types == {PIIType.PERSON, PIIType.USERNAME, PIIType.LOCATION}
+
+
+def test_rejects_a_literal_name_in_prose():
+    shape = "Please forward the signed form to {{PERSON}}; Priya already approved it."
+    with pytest.raises(CarrierError, match="given name"):
+        validate_shape(shape, known_names=NAMES)
+
+
+def test_sentence_initial_ordinary_word_that_is_also_a_name_is_allowed():
+    """'Will' and 'Grace' are given names AND ordinary words. Rejecting them at a
+    sentence start would throw away good carriers for no benefit."""
+    shape = "Will the refund reach {{PERSON}} before Friday? Grace periods still apply."
+    validate_shape(shape, known_names=NAMES)
+
+
+@pytest.mark.parametrize(
+    ("shape", "fragment"),
+    [
+        ("Reset link went to jane.doe@example.com for user {{USERNAME}} today.", "email address"),
+        ("The dashboard at https://crm.example.com/u/42 shows {{PERSON}} as active.", "URL"),
+        ("Login for {{USERNAME}} originated from 192.168.44.9 this morning.", "IP address"),
+        ("Reference 998877665544 was raised by {{PERSON}} this morning.", "long digit run"),
+    ],
+)
+def test_rejects_literal_structured_pii(shape, fragment):
+    with pytest.raises(CarrierError, match=fragment):
+        validate_shape(shape, known_names=NAMES)
+
+
+def test_placeholders_themselves_are_not_mistaken_for_literals():
+    """{{EMAIL}} and {{IP_ADDRESS}} must not trip the literal-PII regexes."""
+    shape = "Contact {{EMAIL}} or check {{URL}}; the request came from {{IP_ADDRESS}}."
+    validate_shape(shape, known_names=NAMES)
+
+
+def test_screen_is_optional_so_the_module_needs_no_faker():
+    shape = "Alice: forwarded the file to {{PERSON}} for review this afternoon."
+    # Without a name set, only the field-label rule applies, and it still fires
+    # because "alice" is not a field label.
+    with pytest.raises(CarrierError, match="speaker name"):
+        validate_shape(shape)
+
+
+# ---------------------------------------------------------------------------
 # Fill: the construction guarantee
 # ---------------------------------------------------------------------------
 def test_fill_produces_exact_offsets():

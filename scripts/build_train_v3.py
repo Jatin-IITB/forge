@@ -49,10 +49,13 @@ from forge.carriers import (
     TRACK_B_FOCUS,
     VALIDATOR_OWNED,
     Carrier,
+    CarrierError,
     anchor_against_construction,
     fill,
+    known_given_names,
     merge_anchor,
     shape_of,
+    validate_shape,
 )
 from forge.dedup import dedup_training_data
 from forge.inference import build_messages, parse_response
@@ -85,20 +88,60 @@ def load_records(path: Path) -> list[PIIRecord]:
     ]
 
 
-def load_carriers(path: Path) -> list[Carrier]:
+def read_cache(path: Path) -> tuple[dict[str, dict], int]:
+    """Read the teacher cache, tolerating a torn final line.
+
+    `--assemble-only` is meant to be usable *while* a labelling run is still
+    appending — the corpus takes days at 5 rpm, and being unable to look at it
+    until it finishes would mean not looking at it. A half-written final line is
+    the expected state during a concurrent read, not a corruption.
+    """
+    if not path.exists():
+        return {}, 0
+    cached: dict[str, dict] = {}
+    torn = 0
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            d = json.loads(line)
+        except json.JSONDecodeError:
+            torn += 1
+            continue
+        cached[d["text"]] = d
+    return cached, torn
+
+
+def load_carriers(path: Path) -> tuple[list[Carrier], Counter]:
+    """Load carriers, re-validating each one on the way in.
+
+    The file is trusted by nobody: it was written by a language model and may have
+    been produced by an older, looser version of the screen. A carrier containing
+    literal PII does not fail loudly downstream — it yields a record with a real
+    entity and no span for it, which trains the model that the entity is not PII.
+    Cheaper to re-check 456 strings here than to find it in a data card later.
+    """
     out: list[Carrier] = []
     seen: set[str] = set()
+    dropped: Counter = Counter()
+    names = known_given_names()
     for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
         d = json.loads(line)
+        try:
+            validate_shape(d["shape"], known_names=names)
+        except CarrierError as exc:
+            dropped[str(exc).split("(")[0].strip()] += 1
+            continue
         c = Carrier(shape=d["shape"], source=d.get("source", "unknown"),
                     register=d.get("register", "unspecified"))
         if c.normalised() in seen:
+            dropped["duplicate shape"] += 1
             continue
         seen.add(c.normalised())
         out.append(c)
-    return out
+    return out, dropped
 
 
 def _spans_json(spans: list[PIISpan]) -> list[dict]:
@@ -326,26 +369,28 @@ def main() -> int:
               file=sys.stderr)
         return 2
 
-    carriers = load_carriers(args.carriers)
+    carriers, carrier_drops = load_carriers(args.carriers)
+    if not carriers:
+        print(f"no usable carriers in {args.carriers}", file=sys.stderr)
+        return 2
     planned = instantiate(carriers, args.total, args.track_b_fraction, args.seed,
                           overplan=args.track_b_overplan)
     track_a = [r for r, t in planned if t == "A"]
     track_b = [r for r, t in planned if t == "B"]
     print(f"carriers: {len(carriers)} distinct shapes "
           f"({sum(1 for c in carriers if c.track_b_eligible)} Track-B eligible)")
+    if carrier_drops:
+        print(f"  dropped at load: {dict(carrier_drops)}")
     print(f"planned: {len(planned)} records = {len(track_a)} Track A + {len(track_b)} Track B")
 
     if not args.resume and args.cache.exists() and not args.assemble_only:
         print(f"refusing: {args.cache} exists and --resume was not given", file=sys.stderr)
         return 2
 
-    cached: dict[str, dict] = {}
+    cached, torn = read_cache(args.cache)
     if args.cache.exists():
-        for line in args.cache.read_text(encoding="utf-8").splitlines():
-            if line.strip():
-                d = json.loads(line)
-                cached[d["text"]] = d
-        print(f"teacher cache: {len(cached)} records already labelled")
+        print(f"teacher cache: {len(cached)} records already labelled"
+              + (f" ({torn} unreadable line(s) skipped)" if torn else ""))
 
     if not args.assemble_only:
         pending = [r for r in track_b if r.text not in cached]
@@ -354,11 +399,7 @@ def main() -> int:
               f"(~{len(pending) * args.k / max(args.rpm, 1e-9) / 60:.1f} h at {args.rpm} rpm)\n")
         if pending:
             label_track_b(pending, args.cache, args)
-            cached = {}
-            for line in args.cache.read_text(encoding="utf-8").splitlines():
-                if line.strip():
-                    d = json.loads(line)
-                    cached[d["text"]] = d
+            cached, _ = read_cache(args.cache)
 
     # --- Track B assembly: verification gate, then the construction anchor -----
     accepted_b: list[PIIRecord] = []

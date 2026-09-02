@@ -38,7 +38,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from forge.carriers import Carrier, CarrierError, shape_of, validate_shape
+from forge.carriers import (
+    Carrier,
+    CarrierError,
+    known_given_names,
+    shape_of,
+    validate_shape,
+)
 from forge.schema import PIIRecord, PIIType
 from forge.teacher_client import ThrottledTeacher
 
@@ -90,6 +96,9 @@ Hard rules:
 - Output ONLY a JSON object: {"shapes": ["...", "..."]}
 - NEVER write a real or invented PII value. Names, addresses, numbers, emails, \
 handles and ages must ALWAYS be placeholders, never literal text.
+- This includes SPEAKER LABELS and SIGNATURES. Write "{{PERSON}}: message" for a \
+chat turn, never "Alice: message". Write "Thanks, {{PERSON}}" never "Thanks, Sam". \
+A literal name anywhere in the text makes the example unusable.
 - Never place two placeholders next to each other without intervening words or \
 punctuation.
 - Vary where the placeholder sits in the sentence: subject, object, mid-clause, \
@@ -180,6 +189,8 @@ def main() -> int:
     rng = random.Random(args.seed)
     forbidden = _split_shapes(args.splits)
     print(f"shapes already used by existing splits: {len(forbidden)}")
+    known_names = known_given_names()
+    print(f"given-name screen: {len(known_names)} names from Faker en_US/en_GB/en_IN")
 
     existing = _load_existing(args.output) if args.resume else []
     seen = {c.normalised() for c in existing}
@@ -258,7 +269,7 @@ def main() -> int:
         added = 0
         for s in shapes:
             try:
-                carrier = validate_shape(s)
+                carrier = validate_shape(s, known_names=known_names)
             except CarrierError as exc:
                 rejects[str(exc).split("(")[0].strip()] += 1
                 continue

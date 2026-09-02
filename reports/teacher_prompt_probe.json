@@ -1,0 +1,129 @@
+{
+  "split": "data/gold/val.jsonl",
+  "n_sampled": 16,
+  "n_scored_both_arms": 16,
+  "gold_instances_sampled": {
+    "LOCATION": 10,
+    "PERSON": 8,
+    "AGE": 2,
+    "PAN": 2,
+    "EMAIL": 2,
+    "BANK_ACCOUNT": 2,
+    "AADHAAR": 2,
+    "PASSPORT": 1,
+    "URL": 1,
+    "USERNAME": 1,
+    "SSN": 1,
+    "DATE_OF_BIRTH": 1,
+    "DRIVER_LICENSE": 1,
+    "PHONE": 1
+  },
+  "gold_instances_scored": {
+    "URL": 1,
+    "USERNAME": 1,
+    "AADHAAR": 2,
+    "LOCATION": 10,
+    "EMAIL": 2,
+    "BANK_ACCOUNT": 2,
+    "PERSON": 8,
+    "SSN": 1,
+    "DATE_OF_BIRTH": 1,
+    "DRIVER_LICENSE": 1,
+    "PHONE": 1,
+    "PAN": 2,
+    "PASSPORT": 1,
+    "AGE": 2
+  },
+  "per_type": {
+    "LOCATION": {
+      "gold": 10,
+      "plain_recall": 0.1,
+      "teacher_mode_recall": 0.1
+    },
+    "PERSON": {
+      "gold": 8,
+      "plain_recall": 1.0,
+      "teacher_mode_recall": 1.0
+    },
+    "USERNAME": {
+      "gold": 1,
+      "plain_recall": 1.0,
+      "teacher_mode_recall": 1.0
+    },
+    "AGE": {
+      "gold": 2,
+      "plain_recall": 1.0,
+      "teacher_mode_recall": 1.0
+    }
+  },
+  "micro_f1": {
+    "plain": 0.7541,
+    "teacher_mode": 0.8525
+  },
+  "identical_span_sets": 15,
+  "per_type_counts": {
+    "plain": {
+      "tp": {
+        "URL": 1,
+        "USERNAME": 1,
+        "AADHAAR": 1,
+        "EMAIL": 2,
+        "BANK_ACCOUNT": 2,
+        "DATE_OF_BIRTH": 1,
+        "SSN": 1,
+        "PERSON": 8,
+        "DRIVER_LICENSE": 1,
+        "PHONE": 1,
+        "AGE": 2,
+        "LOCATION": 1,
+        "PAN": 1
+      },
+      "fn": {
+        "LOCATION": 9,
+        "AADHAAR": 1,
+        "PASSPORT": 1,
+        "PAN": 1
+      },
+      "fp": {
+        "PASSPORT": 1,
+        "PAN": 1,
+        "AADHAAR": 1
+      }
+    },
+    "teacher_mode": {
+      "tp": {
+        "URL": 1,
+        "USERNAME": 1,
+        "AADHAAR": 2,
+        "EMAIL": 2,
+        "BANK_ACCOUNT": 2,
+        "DATE_OF_BIRTH": 1,
+        "SSN": 1,
+        "PERSON": 8,
+        "DRIVER_LICENSE": 1,
+        "PHONE": 1,
+        "PASSPORT": 1,
+        "PAN": 2,
+        "AGE": 2,
+        "LOCATION": 1
+      },
+      "fn": {
+        "LOCATION": 9
+      },
+      "fp": {}
+    }
+  },
+  "teacher_stats": {
+    "calls_ok": 32,
+    "calls_failed": 0,
+    "retries": 0,
+    "prompt_tokens": 11946,
+    "completion_tokens": 4151,
+    "total_tokens": 16097,
+    "p50_latency_s": 0.496,
+    "mean_latency_s": 0.57
+  },
+  "model": "gpt-oss-120b",
+  "temperature": 0.0,
+  "seed": 7717
+}
