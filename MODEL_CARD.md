@@ -58,8 +58,15 @@ Two provenance classes, deliberately kept distinct:
    text, but less diverse than natural text — a real limitation, not a win.
 
 **Leakage control:** three layers — exact-duplicate, near-duplicate (character
-5-gram Jaccard >= 0.85), and gold-set leakage. Train/test share no text, and
-the generators use disjoint Faker seeds.
+5-gram Jaccard >= 0.85), and gold-set leakage. **Train and test share no text
+(verified 0/385 by `make audit`).**
+
+**Known defect (2026-09-03):** the leakage layer was invoked with only the
+*test* split, so it never checked dev. **150 of 189 dev records (79.4%) appear
+verbatim in the training data** — the data engine was seeded from dev. Dev is
+therefore unusable for model selection and has been replaced for that purpose by
+`data/gold/val.jsonl` (533 records, seed 4242, disjointness from train/dev/test
+asserted on the written bytes). The frozen test split is unaffected.
 
 **No proprietary, internal, or scraped data.** The entire corpus regenerates
 from a fixed seed with `make gold` and `make data-engine`.
@@ -71,30 +78,65 @@ regenerated only from seed 42. Primary metric is micro-F1 over exact
 `(start, end, label)` matches — partial credit is not given, because a span
 that half-covers a credit card number still leaks it.
 
+**Known defect (2026-09-03):** the test split contains **20 byte-identical
+duplicate records** — 365 unique texts, not 385. Duplicated records carry double
+weight in micro-F1 and the effective sample size for confidence intervals is 365,
+making them marginally optimistic. Measured impact is immaterial: teacher F1
+0.9482 → 0.9482, student 0.5750 → 0.5801, G1 ratio 0.6064 → 0.6118, all far
+inside a ±0.042 interval. **The freeze is kept** — regenerating a test set after
+seeing results is precisely what the contract forbids. Pinned at exactly 20 by a
+regression test.
+
+All figures below carry 95% bootstrap intervals (`forge/ci.py`). Records are the
+resampling unit; ratio gates use a paired resample; zero-failure measurements use
+the exact binomial bound, because a bootstrap with no observed misses returns
+`[1.0000, 1.0000]` for a degenerate reason.
+
 ### The bar
 
 The teacher was scored on the same frozen set under the same harness, **before** the
 student finished training, so the parity threshold cannot be back-fitted:
 
-| Teacher (GPT-OSS-120B) | Value |
-|---|---|
-| micro-F1 | **0.9482** |
-| micro-precision / recall | 0.9615 / 0.9353 |
-| p50 / p95 latency | 0.59 s / 8.02 s |
+| Teacher (GPT-OSS-120B) | Value | 95% CI |
+|---|---|---|
+| micro-F1 | **0.9482** | [0.9305, 0.9641] |
+| micro-precision / recall | 0.9615 / 0.9353 | — |
+| p50 latency | 0.59 s | — |
+| p95 latency | 8.02 s | ⚠️ **not reproducible — see below** |
 
-**⇒ G1 requires student micro-F1 ≥ 0.9292; G4 requires student p95 ≤ 1.60 s.**
+**⇒ G1 requires student micro-F1 ≥ 0.9292.**
+
+**G4's threshold is unsound as published.** Two runs of the identical teacher
+configuration report p95 = 0.790 s (n=60) and 8.024 s (n=302), while their p50s
+agree within 14%. The 60-sample p95 interval is [0.689, 1.054], so 8.024 sits
+7.6× above it — not sampling noise, but episodic congestion on shared free-tier
+capacity during a longer run. Since G4 is defined as `teacher_p95 / 5`, the gate
+inherits that instability: a clean p95 near 0.8 s makes the real target
+**≤ 0.16 s**, not the ≤ 1.60 s previously published. A re-measurement is in
+flight. See `reports/measurement_integrity.md` §4.
 
 ### Gate table
 
+Student is `run_002`. Model-only unless stated; system = model + validator layer.
+
 | Gate | Threshold | Measured | Verdict |
 |---|---|---|---|
-| G1 quality parity | ≥ 0.9292 | run_002 scoring | PENDING |
-| G2 schema validity | ≥ 99.9% | 100% (run_001, 385/385) | PASS |
-| G3 cost per 1k | ≤ teacher / 10 | run_002 scoring | PENDING |
-| G4 p95 latency | ≤ 1.60 s | run_002 scoring | PENDING |
-| G5 deployability | runs on laptop / CPU | partial — unquantized MPS only | PENDING |
-| G6 safety / OOD | ≥ 0.90 | not started | PENDING |
-| High-severity recall | ≥ 0.99 on 9 types | **1.0000 on all 9** (validator layer) | PASS |
+| G1 quality parity | ≥ 0.98× teacher | **0.6064** [0.5624, 0.6485] paired | ❌ **FAIL** |
+| G2 schema validity | ≥ 99.9% | **99.74%** (384/385) | ❌ **FAIL** — by one record |
+| G3 cost per 1k | ≤ teacher / 10 | **1.20×** ($0.1910 vs $0.1592) | ❌ **FAIL** — student costs *more* |
+| G4 p95 latency | ≤ teacher / 5 | **1.08×** (8.68 s vs 8.02 s) | ❌ **FAIL** — and threshold unsound |
+| G5 deployability | laptop / CPU | unquantized fp16 on MPS only | ❌ **FAIL** |
+| G6 safety / OOD | ≥ 0.90 | 31-probe set built, unscored | ⏸ pending |
+| High-severity recall (pooled) | ≥ 0.99 on 9 types | **1.0000**, 571 instances, 0 misses, bound **0.9948** | ✅ **PASS** |
+| High-severity recall (per type) | ≥ 0.99 each | 1.0000 each, but n=15–41 supports only 0.819–0.930 | ⚠️ **not measurable** |
+
+G2 is recorded as a failure rather than rounded up. A threshold that bends under
+a single record out of 385 is not a threshold.
+
+The per-type floor cannot be demonstrated on this test set at any performance
+level: proving ≥ 0.99 at 95% confidence with zero misses requires **n ≥ 299 per
+type**, and the split carries 15–41. The pooled figure clears it only because
+the held-out `val` split adds 339 further instances.
 
 **Run history**
 
