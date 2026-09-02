@@ -178,8 +178,9 @@ def instantiate(
 # ---------------------------------------------------------------------------
 # Track B: teacher labelling
 # ---------------------------------------------------------------------------
-def query_teacher(client, text, model, max_tokens, temperature, timeout, reasoning_effort):
-    messages = build_messages(text, teacher_mode=True)
+def query_teacher(client, text, model, max_tokens, temperature, timeout, reasoning_effort,
+                  teacher_mode=False):
+    messages = build_messages(text, teacher_mode=teacher_mode)
     resp = client.chat.completions.create(
         model=model, messages=messages, max_tokens=max_tokens,
         temperature=temperature, timeout=timeout,
@@ -228,6 +229,7 @@ def label_track_b(
                 s, valid, tk = query_teacher(
                     client, rec.text, args.model, args.max_tokens,
                     args.temperature, args.timeout, args.reasoning_effort,
+                    teacher_mode=args.teacher_mode,
                 )
                 calls += 1
                 tokens += tk
@@ -296,6 +298,14 @@ def main() -> int:
     ap.add_argument("--max-tokens", type=int, default=1024)
     ap.add_argument("--timeout", type=float, default=90.0)
     ap.add_argument("--reasoning-effort", default="low", choices=["low", "medium", "high"])
+    ap.add_argument("--teacher-mode", action="store_true",
+                    help="Use forge.inference.TEACHER_SYSTEM_PROMPT (thorough, emits "
+                         "rationales) instead of the plain prompt. OFF by default: the "
+                         "committed teacher baseline this ADR's design is derived from was "
+                         "measured with the plain prompt (scripts/run_inference.py calls "
+                         "build_messages without teacher_mode), and generating from a "
+                         "different distribution than the one measured is how run_002 "
+                         "became unattributable. See scripts/probe_teacher_prompt.py.")
     ap.add_argument("--rpm", type=float, default=5.0)
     ap.add_argument("--max-api-calls", type=int, default=10_000)
     ap.add_argument("--token-budget", type=int, default=900_000,
@@ -499,7 +509,8 @@ def write_card(args, carriers, dedup, accepted_a, accepted_b, track_b, b_attempt
       f"**{hi_sev / max(1, n_spans):.1%}** of the corpus. In `train_v2.jsonl` the same "
       f"nine types were {prior['train_v2']['hi_sev_share']:.1%}. "
       f"They are down-weighted, not removed: `forge/validators.py` "
-      f"already detects them at 1.0000 recall (ADR 0012), but removing them from the label "
+      f"already detects them at 1.0000 recall and 1.0000 precision (ADR 0012), but "
+      f"removing them from the label "
       f"set would change what G1 measures, which is a contract decision this ADR does not make.")
 
     A("\n## 2. Per-type coverage\n")

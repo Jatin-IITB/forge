@@ -130,10 +130,15 @@ we *know* are in the text, because we injected them. The teacher never sees them
    Rejected, not repaired — repairing would hide the rate, and the rate is the finding.
    Misses and boundary disagreements are counted separately.
 2. **Validator-owned spans are taken from construction, not from the teacher.** On the nine
-   high-severity types the deterministic layer scores 1.0000 recall against the teacher's
-   0.87 mean (`DRIVER_LICENSE` 0.533). Where we hold exact offsets, using the teacher's
-   guess would be choosing the worse label deliberately; rejecting the record would discard
-   it over a type the model is not being asked to own.
+   high-severity types the deterministic layer now scores 1.0000 on **both** recall and
+   precision (commit `4d51d66` took its 55 false positives to 0 without moving recall),
+   against a teacher averaging 0.87 recall and failing six of the nine — `DRIVER_LICENSE`
+   0.533. Where we hold exact offsets, using the teacher's guess would be choosing the worse
+   label deliberately; rejecting the record would discard it over a type the model is not
+   being asked to own. Note the dependency runs through `forge.schema.HIGH_SEVERITY`, the
+   type roster, not through `forge/validators.py` detection behaviour — the engine never
+   calls a validator, so improvements to the validator layer cannot silently change what
+   this engine labels.
 3. **Teacher spans over text we did not inject are kept.** These are entities occurring
    naturally in the teacher's own prose — the fuzzy, context-dependent cases construction
    cannot manufacture. **This is the only genuinely distilled label content in the corpus,**
