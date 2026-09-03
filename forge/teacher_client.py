@@ -41,6 +41,7 @@ class TeacherStats:
     retries: int = 0
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    wait_s: float = 0.0  # time spent in backoff/cooldown, not in server round-trips
     latencies_s: list[float] = field(default_factory=list)
 
     @property
@@ -56,6 +57,7 @@ class TeacherStats:
             "prompt_tokens": self.prompt_tokens,
             "completion_tokens": self.completion_tokens,
             "total_tokens": self.total_tokens,
+            "throttle_wait_s": round(self.wait_s, 1),
             "p50_latency_s": round(lat[len(lat) // 2], 3) if lat else None,
             "mean_latency_s": round(sum(lat) / len(lat), 3) if lat else None,
         }
@@ -98,6 +100,7 @@ class ThrottledTeacher:
         max_retries: int = 5,
         backoff_base: float = 15.0,
         backoff_cap: float = 120.0,
+        retry_after_cap: float = 3900.0,
         sleep: Callable[[float], None] = time.sleep,
         monotonic: Callable[[], float] = time.monotonic,
         on_retry: Callable[[int, BaseException, float], None] | None = None,
@@ -107,6 +110,7 @@ class ThrottledTeacher:
         self._max_retries = max_retries
         self._backoff_base = backoff_base
         self._backoff_cap = backoff_cap
+        self._retry_after_cap = retry_after_cap
         self._sleep = sleep
         self._monotonic = monotonic
         self._on_retry = on_retry
@@ -118,6 +122,33 @@ class ThrottledTeacher:
     def backoff_for(self, attempt: int) -> float:
         """Seconds to wait after failed `attempt` (1-based). Bounded, deterministic."""
         return min(self._backoff_base * (2 ** (attempt - 1)), self._backoff_cap)
+
+    def delay_for(self, attempt: int, exc: BaseException) -> float:
+        """Prefer the server's `Retry-After` over our guess.
+
+        The Cerebras free tier does not only throttle per minute — once an hourly
+        allowance is gone it answers 429 with `retry-after: 3600`. Exponential
+        backoff is the wrong instrument for that: the schedule tops out at 120s, so
+        a client that ignores the header burns its whole retry budget inside the
+        first three minutes of a one-hour cooldown and reports the work as failed.
+        Worse, each of those attempts is itself a request against the quota.
+
+        The header is trusted up to `retry_after_cap`, so a pathological value
+        cannot park a job for a week.
+        """
+        after = None
+        response = getattr(exc, "response", None)
+        headers = getattr(response, "headers", None)
+        if headers:
+            raw = headers.get("retry-after") or headers.get("Retry-After")
+            if raw:
+                try:
+                    after = float(raw)
+                except (TypeError, ValueError):
+                    after = None
+        if after is None:
+            return self.backoff_for(attempt)
+        return max(0.0, min(after, self._retry_after_cap))
 
     def _throttle(self) -> None:
         if not self._min_interval or self._last_start is None:
@@ -144,7 +175,8 @@ class ThrottledTeacher:
                 self.stats.retries += 1
                 if attempt == self._max_retries:
                     break
-                delay = self.backoff_for(attempt)
+                delay = self.delay_for(attempt, exc)
+                self.stats.wait_s += delay
                 if self._on_retry:
                     self._on_retry(attempt, exc, delay)
                 self._sleep(delay)

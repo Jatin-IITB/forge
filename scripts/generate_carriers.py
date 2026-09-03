@@ -197,7 +197,9 @@ def main() -> int:
     print(f"resuming with {len(existing)} shapes" if existing else "starting fresh")
 
     teacher = ThrottledTeacher(
-        OpenAI(base_url=args.base_url, api_key=key), rpm=args.rpm,
+        # max_retries=0: ThrottledTeacher is the only retrier, so the SDK cannot
+        # silently spend requests against an exhausted quota before we see it.
+        OpenAI(base_url=args.base_url, api_key=key, max_retries=0), rpm=args.rpm,
         on_retry=lambda a, e, d: print(f"    {type(e).__name__}, retry {a} in {d:.0f}s",
                                        flush=True),
     )

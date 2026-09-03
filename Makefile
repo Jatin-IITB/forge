@@ -37,7 +37,8 @@ GGUF     ?= models/pii-1.5b-gguf
 PYTHON   ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || command -v python3 || echo python)
 
 .PHONY: help install validate gold gold-sample validation infer teacher-baseline \
-        data-engine carriers train-v3 train-v3-card train eval economics \
+        data-engine carriers train-v3 train-v3-card teacher-types \
+        teacher-prompt-probe train eval economics \
         error-analysis merge gguf report audit test lint forge clean-preds
 
 help:
@@ -51,6 +52,7 @@ help:
 	@echo "  make carriers         # WP-2 stage 1: teacher-written carrier shapes (ADR 0015)"
 	@echo "  make train-v3         # WP-2 stage 2: fill + teacher-label -> data/train_v3.jsonl"
 	@echo "  make train-v3-card    # rebuild train_v3 + its data card from cache, no API calls"
+	@echo "  make teacher-types    # per-type teacher-vs-student headroom (ADR 0015 evidence)"
 	@echo "  make train            # LoRA SFT on verified training data"
 	@echo "  make infer            # run the student over the test set"
 	@echo "  make eval             # score PREDS against GOLD, check contract gates"
@@ -105,8 +107,16 @@ data-engine:
 # per record and --resume costs nothing but re-reading a file.
 CARRIERS ?= data/carriers_v3.jsonl
 TRAIN_V3 ?= data/train_v3.jsonl
-CARRIER_TARGET ?= 400
-TRAIN_V3_TOTAL ?= 4500
+CARRIER_TARGET ?= 450
+# TRAIN_V3_TOTAL is a request, not the yield: each carrier is filled
+# round(TOTAL / n_carriers) times, and carriers with no placeholder slot are
+# filled once. At 456 carriers, 5000 asks for 11 repeats and yields 4256 records
+# (4205 after dedup) -- inside the 4000-5000 target that 4500 undershot.
+#
+# It MUST match between `train-v3` and `train-v3-card`: the plan is deterministic
+# in (carriers, total, fraction, seed), and the teacher cache is keyed by record
+# text, so a different total silently invalidates every cached label.
+TRAIN_V3_TOTAL ?= 5000
 
 carriers:
 	PYTHONPATH=scripts $(PYTHON) scripts/generate_carriers.py --output $(CARRIERS) \
@@ -125,6 +135,17 @@ train-v3:
 train-v3-card:
 	PYTHONPATH=scripts $(PYTHON) scripts/build_train_v3.py --carriers $(CARRIERS) \
 		--output $(TRAIN_V3) --total $(TRAIN_V3_TOTAL) --assemble-only --resume
+
+# The two measurements ADR 0015 is derived from. Neither trains anything; both
+# exist so the ADR's tables can be rechecked rather than believed.
+teacher-types:
+	$(PYTHON) scripts/analyse_teacher_types.py --gold $(GOLD) \
+		--json reports/teacher_type_analysis.json
+
+teacher-prompt-probe:
+	$(PYTHON) scripts/probe_teacher_prompt.py --split data/gold/val.jsonl \
+		--model $(MODEL) --base-url $(TEACHER_URL) \
+		--api-key-env $(TEACHER_KEY_ENV) --rpm $(TEACHER_RPM)
 
 train:
 	$(PYTHON) scripts/run_train.py --train-data $(TRAIN) --base-model $(BASE) \

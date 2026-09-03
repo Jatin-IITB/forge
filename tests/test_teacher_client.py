@@ -153,6 +153,41 @@ def test_backoff_sleep_is_excluded_from_latency():
     assert clock.slept == [15.0]
 
 
+class Throttled(ConnectionError):
+    """A 429 carrying a Retry-After header, as the free tier actually sends it."""
+
+    def __init__(self, retry_after):
+        super().__init__("rate limited")
+        self.response = type("resp", (), {"headers": {"retry-after": retry_after}})()
+
+
+def test_retry_after_header_overrides_exponential_backoff():
+    """The free tier answers an exhausted hourly allowance with retry-after: 3600.
+
+    Exponential backoff tops out at 120s, so a client that ignores the header
+    burns its entire retry budget in the first three minutes of a one-hour
+    cooldown — and every one of those attempts is itself a request against the
+    quota that is already exhausted.
+    """
+    teacher, _, clock = build([Throttled("3600"), FakeResponse()], rpm=None)
+    teacher.complete(model="m", messages=[])
+    assert clock.slept == [3600.0], "should wait the hour the server asked for"
+    assert teacher.stats.wait_s == 3600.0
+
+
+def test_retry_after_is_capped_so_a_bad_value_cannot_park_the_job():
+    teacher, _, clock = build([Throttled("999999"), FakeResponse()], rpm=None,
+                              retry_after_cap=3900.0)
+    teacher.complete(model="m", messages=[])
+    assert clock.slept == [3900.0]
+
+
+def test_falls_back_to_backoff_when_header_is_absent_or_junk():
+    teacher, _, clock = build([Boom(), Throttled("not-a-number"), FakeResponse()], rpm=None)
+    teacher.complete(model="m", messages=[])
+    assert clock.slept == [15.0, 30.0]
+
+
 def test_on_retry_callback_reports_attempt_and_delay():
     seen = []
     teacher, _, _ = build(

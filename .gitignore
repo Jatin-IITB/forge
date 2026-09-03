@@ -53,3 +53,9 @@ RESUME_BRIEF.md
 data/ood_probe.jsonl
 data/ood_results_*.json
 data/teacher_token_sample.jsonl
+
+# WP-2 data engine: teacher-written carrier shapes and the k=3 label cache.
+# Generated, so untracked like every other generated set here — `make carriers`
+# rebuilds them. reports/data_card_v3.md records the count, registers, seed and
+# token cost so the artifact stays described even though it is not committed.
+data/carriers_*.jsonl
