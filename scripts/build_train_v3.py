@@ -535,6 +535,28 @@ def write_card(args, carriers, dedup, accepted_a, accepted_b, track_b, b_attempt
     A("**Contract:** `contracts/pii_redaction_v2.yaml` · **Decision record:** "
       "`docs/adr/0015-teacher-labelled-data-engine.md`\n")
 
+    # Completion state first. A reader who stops after one paragraph should not
+    # come away thinking this is a finished corpus if it is not.
+    b_share = len(kept_b) / max(1, len(kept))
+    b_done = len(cached)
+    b_planned = len(track_b)
+    if b_share >= 0.40:
+        A("\n> **Status: complete.** Track B labelling reached its target share; the "
+          "numbers below describe a finished corpus.\n")
+    else:
+        A(f"\n> **Status: PARTIAL — do not train on this file expecting a distilled "
+          f"corpus.** Track B is **{b_share:.1%}** of records against a ≥40% target: "
+          f"{b_done} of {b_planned} planned Track B records have been labelled "
+          f"({b_done / max(1, b_planned):.1%}). Track A is complete and is exact by "
+          f"construction, so what exists is a large, carrier-diverse *construction* "
+          f"corpus with a distilled fraction still accumulating.\n>\n"
+          f"> The limit is **requests, not tokens**. The teacher tier answers an "
+          f"exhausted hourly allowance with `retry-after: 3600`, and at k=3 this "
+          f"engine spends three requests per Track B record — "
+          f"{b_planned * 3} for the full set. Re-run `make train-v3` to continue; it "
+          f"resumes from the cache and costs nothing for work already done, and "
+          f"`make train-v3-card` regenerates this file at any point mid-run.\n")
+
     A("\n## 1. Size and composition\n")
     A("| | records | spans | spans/record |")
     A("|---|---|---|---|")

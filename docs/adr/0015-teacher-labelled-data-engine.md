@@ -1,6 +1,7 @@
 # ADR 0015 — A two-track data engine, because the teacher is not uniformly better than construction
 
-**Status:** proposed — predictions recorded, run in flight (2026-09-03)
+**Status:** accepted for the method, **partial on delivery** — carriers and Track A complete,
+Track B labelling rate-limited and still running; P1–P4 unresolved (2026-09-03)
 **Date:** 2026-09-03
 **Depends on:** ADR 0012 (validator layer), ADR 0013 (capacity × data jointly binding), ADR 0014 (measurement integrity), `reports/baseline_120b.md`
 **Work package:** ROADMAP WP-2
@@ -296,5 +297,49 @@ claiming it now would be the post-hoc gate-setting `SUCCESS.md` forbids.
 
 ## Outcome
 
-*To be completed against P1–P5 when generation finishes, including any prediction that
-fails. ADR 0013 was rejected by its own experiment; that is the standard here.*
+**Interim, 2026-09-03. Generation is still running; three of five predictions are
+unresolved and are recorded as unresolved rather than estimated from a sample too small to
+carry them.**
+
+### P5 — mechanical targets: two met, one blocked
+
+| target | result |
+|---|---|
+| ≥ 300 distinct carrier shapes | **456** — met |
+| leakage 0 against all four splits, on written bytes | **0 / 0 / 0 / 0** (`dev`, `val`, `test`, `train`; also 0 against `train_v2`) — met |
+| ≥ 40% Track B share | **not met — 0.1%**, and the reason is below |
+
+### Why Track B is not there yet
+
+The binding constraint was misidentified in the Consequences section above, which budgeted
+in tokens: *"~600 tok/record for carriers plus k=3 labelling, against a 5 req/min, 1M
+tok/day free tier."* Tokens were never the limit. Roughly 110k of the day's 1M were spent.
+
+The tier meters **requests against an hourly allowance** and answers exhaustion with
+`retry-after: 3600`. At k=3 this engine spends three requests per Track B record — 7,854
+for the planned 2,618 — and an hour of cooldown buys back only a small burst. That is a
+different economics from the one this ADR assumed, and it is the honest reason the corpus
+is partial rather than any property of the method.
+
+The design's response is the obvious one and is **not yet implemented**: under a
+request-metered tier, labelling one record per request is the wrong unit. Batching several
+records into a single completion would cut request count by that factor at roughly constant
+token cost. It is deliberately not being bolted on mid-run — a multi-record prompt is a
+different distribution from the single-record prompt every measurement in this ADR was
+taken under, and adopting it without re-measuring would repeat exactly the mismatch caught
+in "Two things found while building" above.
+
+### P1–P4 — unresolved
+
+Five Track B records have cleared k=3 so far. The gate is at least discriminating rather
+than rubber-stamping (one record came back at agreement 0.89, and the construction anchor
+rejected three of five for a missing `LOCATION`, a missing `STREET_ADDRESS`, and a `PERSON`
+boundary disagreement), but n=5 cannot support a claim about an accept rate, a miss rate, or
+a discovery rate. **P1, P2, P3 and P4 stay open.** P3 in particular — whether the teacher
+finds anything in its own prose that construction did not inject — is the prediction that
+decides whether this ADR was worth doing, and it currently reads 0 spans on 2 accepted
+records, which is a number with no power behind it.
+
+`make train-v3` resumes from the cache. The outcome section will be completed against
+P1–P4 when the accepted-record count can carry them, including if it says Track B was not
+worth its request budget.
