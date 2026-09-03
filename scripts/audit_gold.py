@@ -138,6 +138,89 @@ def audit_coverage(stats: dict, split: str, a: Audit) -> None:
             )
 
 
+# Types whose *value* does not identify them: a bare number or date only means
+# what the surrounding sentence says it means. AADHAAR, PAN, SSN, CREDIT_CARD,
+# EMAIL and URL are self-identifying by shape and need no anchor.
+_ANCHOR: dict[str, re.Pattern[str]] = {
+    "AGE": re.compile(r"\b(age[ds]?|years? old|yrs?|y/?o)\b", re.IGNORECASE),
+    "DATE_OF_BIRTH": re.compile(r"\b(born|d\.?o\.?b\.?|date of birth|birthday|birth date)\b", re.IGNORECASE),
+    "BANK_ACCOUNT": re.compile(r"\b(account|a/c|acct|iban|bank|routing|deposit|statement|transaction)\b", re.IGNORECASE),
+    "PASSWORD": re.compile(r"\b(password|passwd|pwd|passphrase|security code|otp|credential)\b", re.IGNORECASE),
+}
+
+# Positive evidence that the span means something *else*. Distinct from a missing
+# anchor: absence of "born" is weak, presence of "invoice ... on <date>" is strong.
+_CONTRADICTS: dict[str, re.Pattern[str]] = {
+    "AGE": re.compile(r"\b(within|days?|hours?|weeks?|months?|amount|status|qty|quantity|\$|USD|INR)\b", re.IGNORECASE),
+    "DATE_OF_BIRTH": re.compile(
+        r"\b(invoice|order|confirmed|filed|effective|issued|expires?|due|shipped|posted"
+        r"|created|scheduled|appointment|meeting|delivery|transaction|payment|follow.?up)\b", re.IGNORECASE
+    ),
+}
+
+_ANCHOR_WINDOW = 45
+
+
+def audit_semantics(records: list[PIIRecord], split: str, a: Audit) -> dict:
+    """Are context-dependent labels supported by the sentence around them?
+
+    Construction-based generation makes labels exact by *offset* — the filler
+    knows where it put the value — while nothing checks they are right by
+    *meaning*. A {DATE_OF_BIRTH} slot dropped into "Order #1234 confirmed on
+    <date>" is offset-perfect and semantically false, and training on it teaches
+    that any date is a birth date. That is a precision failure manufactured on
+    purpose, in a corpus whose point is to fix a precision/recall frontier.
+
+    Two signals, deliberately not conflated:
+
+    * **contradicted** — positive evidence of another meaning. Strong; an error.
+    * **unanchored** — merely no supporting keyword. Weak on its own: "Rachita
+      Thakkar (53) requested an upgrade" is a perfectly good AGE with no anchor
+      word, and "unfamiliar transaction on my statement from <digits>" is a good
+      BANK_ACCOUNT. Reported as a warning, never an error.
+
+    Found by comparing the frozen gold (0 contradicted) against a teacher-written
+    carrier corpus (17% contradicted on AGE and DATE_OF_BIRTH). The difference is
+    structural: gold templates are hand-written with the anchor built in
+    ("age {AGE}", "born {DOB}"); generated prose has no such guarantee.
+    """
+    out: dict[str, dict] = {}
+    for label, anchor in _ANCHOR.items():
+        total = anchored = contradicted = 0
+        example = None
+        for r in records:
+            for s in r.spans:
+                if s.label.value != label:
+                    continue
+                total += 1
+                lo = max(0, s.start - _ANCHOR_WINDOW)
+                hi = min(len(r.text), s.end + _ANCHOR_WINDOW)
+                window = r.text[lo : s.start] + " " + r.text[s.end : hi]
+                if anchor.search(window):
+                    anchored += 1
+                    continue
+                bad = _CONTRADICTS.get(label)
+                if bad and bad.search(window):
+                    contradicted += 1
+                    if example is None:
+                        example = r.text[lo:hi]
+        if not total:
+            continue
+        out[label] = {"total": total, "anchored": anchored, "contradicted": contradicted}
+        if contradicted:
+            a.err(
+                f"{split}: {label} — {contradicted}/{total} spans sit in a context that "
+                f"contradicts the label, e.g. {example!r}"
+            )
+        unanchored = total - anchored - contradicted
+        if total >= 10 and unanchored / total > 0.5:
+            a.warn(
+                f"{split}: {label} — {unanchored}/{total} spans have no supporting keyword. "
+                "Weak signal on its own, but worth reading if the type is trained on."
+            )
+    return out
+
+
 def audit_leakage(train_path: Path, gold: dict[str, list[PIIRecord]], a: Audit) -> dict:
     """Any gold carrier text appearing in training data invalidates the split."""
     if not train_path.exists():
@@ -177,6 +260,7 @@ def main() -> int:
         gold[split] = _load(path)
         stats[split] = audit_records(gold[split], split, a)
         audit_coverage(stats[split], split, a)
+        stats[split]["semantics"] = audit_semantics(gold[split], split, a)
 
     leak = audit_leakage(args.train, gold, a)
 

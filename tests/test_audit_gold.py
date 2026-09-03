@@ -95,6 +95,59 @@ class TestFrozenTestSplit:
         assert len(test_split) - len(unique) == 20
 
 
+class TestLabelSemantics:
+    """Labels must be right by *meaning*, not merely exact by offset.
+
+    Construction-based generation guarantees offsets — the filler knows where it
+    put the value — but nothing checks the sentence agrees. A {DATE_OF_BIRTH}
+    slot in "Order #1234 confirmed on <date>" is offset-perfect and false, and a
+    corpus of those teaches that any date is a birth date.
+
+    The frozen gold survives this because its templates are hand-written with
+    the anchor built in ("age {AGE}", "born {DOB}"). A teacher-written carrier
+    corpus generated later did not: 20/145 AGE and 88/325 DATE_OF_BIRTH spans
+    sit in contexts that contradict the label. These tests keep the gold on the
+    right side of that line.
+    """
+
+    @pytest.mark.parametrize("split", ["test", "val", "dev"])
+    def test_no_label_is_contradicted_by_its_context(self, split):
+        import sys
+
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+        from audit_gold import Audit, audit_semantics
+
+        path = GOLD / f"{split}.jsonl"
+        if not path.exists():
+            pytest.skip(f"{split} split not built")
+        a = Audit()
+        stats = audit_semantics(_load(path), split, a)
+        offenders = {k: v for k, v in stats.items() if v["contradicted"]}
+        assert offenders == {}, f"{split}: semantically contradicted labels {offenders}"
+
+    def test_every_birth_date_has_a_birth_anchor(self, test_split):
+        """DATE_OF_BIRTH is the type where a missing anchor is itself damning.
+
+        A bare date means nothing on its own — unlike an Aadhaar number, whose
+        shape identifies it. Gold is 25/25 anchored; the generated corpus was
+        8/325.
+        """
+        import sys
+
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+        from audit_gold import _ANCHOR, _ANCHOR_WINDOW
+
+        pat = _ANCHOR["DATE_OF_BIRTH"]
+        for r in test_split:
+            for s in r.spans:
+                if s.label.value != "DATE_OF_BIRTH":
+                    continue
+                lo = max(0, s.start - _ANCHOR_WINDOW)
+                hi = min(len(r.text), s.end + _ANCHOR_WINDOW)
+                window = r.text[lo : s.start] + " " + r.text[s.end : hi]
+                assert pat.search(window), f"{r.id}: DOB {s.text!r} has no birth anchor in {window!r}"
+
+
 class TestValidationSplit:
     """The clean model-selection split (WP-0d), built by build_validation.py.
 
