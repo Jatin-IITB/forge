@@ -1,0 +1,170 @@
+{
+  "track_b_audited": 205,
+  "shapes_audited": 159,
+  "shapes_total": 456,
+  "threshold": 0.5,
+  "suspect_types": [
+    "AGE",
+    "DATE_OF_BIRTH"
+  ],
+  "suspect_pairs": 40,
+  "track_a_total": 1638,
+  "track_a_affected": 152,
+  "track_a_affected_share": 0.0928,
+  "per_type": {
+    "AADHAAR": {
+      "injected": 7,
+      "declined": 0,
+      "rate": 0.0,
+      "verdict": "not on trial"
+    },
+    "AGE": {
+      "injected": 27,
+      "declined": 16,
+      "rate": 0.5926,
+      "verdict": "carrier suspect"
+    },
+    "API_KEY": {
+      "injected": 11,
+      "declined": 0,
+      "rate": 0.0,
+      "verdict": "not on trial"
+    },
+    "BANK_ACCOUNT": {
+      "injected": 6,
+      "declined": 0,
+      "rate": 0.0,
+      "verdict": "not on trial"
+    },
+    "CREDIT_CARD": {
+      "injected": 15,
+      "declined": 0,
+      "rate": 0.0,
+      "verdict": "not on trial"
+    },
+    "DATE_OF_BIRTH": {
+      "injected": 45,
+      "declined": 31,
+      "rate": 0.6889,
+      "verdict": "carrier suspect"
+    },
+    "DRIVER_LICENSE": {
+      "injected": 3,
+      "declined": 0,
+      "rate": 0.0,
+      "verdict": "not on trial"
+    },
+    "EMAIL": {
+      "injected": 34,
+      "declined": 0,
+      "rate": 0.0,
+      "verdict": "not on trial"
+    },
+    "IP_ADDRESS": {
+      "injected": 21,
+      "declined": 0,
+      "rate": 0.0,
+      "verdict": "not on trial"
+    },
+    "LOCATION": {
+      "injected": 91,
+      "declined": 85,
+      "rate": 0.9341,
+      "verdict": "teacher blind spot (ADR 0015)"
+    },
+    "PAN": {
+      "injected": 7,
+      "declined": 0,
+      "rate": 0.0,
+      "verdict": "not on trial"
+    },
+    "PASSWORD": {
+      "injected": 8,
+      "declined": 0,
+      "rate": 0.0,
+      "verdict": "not on trial"
+    },
+    "PERSON": {
+      "injected": 238,
+      "declined": 0,
+      "rate": 0.0,
+      "verdict": "not on trial"
+    },
+    "PHONE": {
+      "injected": 33,
+      "declined": 0,
+      "rate": 0.0,
+      "verdict": "not on trial"
+    },
+    "SSN": {
+      "injected": 4,
+      "declined": 0,
+      "rate": 0.0,
+      "verdict": "not on trial"
+    },
+    "STREET_ADDRESS": {
+      "injected": 72,
+      "declined": 7,
+      "rate": 0.0972,
+      "verdict": "not on trial"
+    },
+    "URL": {
+      "injected": 22,
+      "declined": 0,
+      "rate": 0.0,
+      "verdict": "not on trial"
+    },
+    "USERNAME": {
+      "injected": 19,
+      "declined": 3,
+      "rate": 0.1579,
+      "verdict": "not on trial"
+    }
+  },
+  "examples": {
+    "DATE_OF_BIRTH": [
+      {
+        "span": "05 Apr 1986",
+        "text": "Charles Patel won a prize! Claim at Gerardport before 05 Apr 1986."
+      },
+      {
+        "span": "12 Apr 2008",
+        "text": "Anyone else think Pallavi Reddy's latest vlog about 12 Apr 2008 vibes nails the aesthetic?"
+      },
+      {
+        "span": "20/12/1961",
+        "text": "This notice confirms that Ben Bennett-West has authorized Vritti Nagarajan to act on their behalf for the claim filed on 20/12/1961."
+      },
+      {
+        "span": "June 23, 1998",
+        "text": "To Ekantika Thaker:\nYour insurance premium for the property at 98 Charlotte Throughway, East Vanessaport has been recalculated as of June 23, 1998 to reflect a 74 increase due to market conditions."
+      },
+      {
+        "span": "1980-02-17",
+        "text": "Greetings Wyatt Master,\nYour recent request for a policy amendment in North Lorraineton has been processed; the effective date is 1980-02-17 and the documentation will be sent to your yashodhara46@example.com."
+      }
+    ],
+    "AGE": [
+      {
+        "span": "46",
+        "text": "Hello Catherine Rivers,\n\nThe invoice for the services rendered at 83, Choudhry Street, Phagwara (adjacent to Mathura) is attached; please settle it within 46 days.\n\nThank you,\nGerard Taylor-Holt"
+      },
+      {
+        "span": "27",
+        "text": "A status update for Lisa Alexander: the shipment bound for North Richardhaven is in transit, last seen at the sorting facility at 27 hours."
+      },
+      {
+        "span": "25",
+        "text": "Transaction row shows buyer Lisa Spencer and seller Udarsh Gandhi; amount $25; AADHAAR 7744 4131 0144 linked, PAN EMELF5580I confirmed."
+      },
+      {
+        "span": "74",
+        "text": "To Ekantika Thaker:\nYour insurance premium for the property at 98 Charlotte Throughway, East Vanessaport has been recalculated as of June 23, 1998 to reflect a 74 increase due to market conditions."
+      },
+      {
+        "span": "57",
+        "text": "Data row: Karen Best filed claim, Lynn Williamson approved; SSN 243-79-8796 and driver license MH-24369719 attached; status 57."
+      }
+    ]
+  }
+}

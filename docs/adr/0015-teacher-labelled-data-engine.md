@@ -297,9 +297,95 @@ claiming it now would be the post-hoc gate-setting `SUCCESS.md` forbids.
 
 ## Outcome
 
-**Interim, 2026-09-03. Generation is still running; three of five predictions are
-unresolved and are recorded as unresolved rather than estimated from a sample too small to
-carry them.**
+**Interim, 2026-09-03, at 205 labelled Track B records (8% of the planned 2,618).
+Generation continues. P1 and P3 have failed; P2 and P4 are confirmed. The finding that
+matters most was not predicted at all.**
+
+### Scoreboard
+
+| | prediction | measured | |
+|---|---|---|---|
+| **P1** | Track B accept rate ≥ 0.60 | **0.424** (87/205) | **failed** |
+| **P2** | `LOCATION` most-missed model-owned type, miss rate > 0.25 | **0.934** (85/91), by far the most-missed | confirmed |
+| **P3** | teacher discoveries ≥ 0.15 spans/accepted record | **0.0000** (0 spans over 87 records) | **failed** |
+| **P4** | `STREET_ADDRESS` boundary disagreement ≥ 0.125 | **0.153** (11/72) | confirmed |
+| **P5** | ≥300 shapes / leakage 0 / ≥40% Track B | **456** / **0,0,0,0** / **5.2%** | 2 of 3 |
+
+### P3 failed, and this ADR said what that means
+
+The prediction was written as the one that decides whether the work was worth doing, with
+the consequence stated in advance: *"If this number is near zero, Track B has bought carrier
+diversity and a verification signal but no distilled labels, and the honest conclusion is
+that the engine is construction with extra steps and a teacher bill."*
+
+It is not near zero. It **is** zero. Across 87 accepted records the teacher found not one
+entity that construction had not already injected. On this corpus, distillation contributed
+no labels.
+
+Part of that is self-inflicted and worth naming, because attributing it entirely to the
+teacher would be wrong. The literal-PII screen added earlier the same day strips names,
+emails, IPs and digit runs out of carrier prose so that Track A labels are complete — and
+that is precisely the material Track B existed to discover. The screen and P3 are in direct
+tension: with literal names left in, the teacher would have "discovered" them, but those
+discoveries would only have been repairing a defect the screen now prevents. A carrier whose
+prose is clean by construction has nothing left in it to find.
+
+### The finding that was not predicted: construction is wrong ~9% of the time
+
+`anchor.missing` was designed to measure the teacher. Read the other way it measures the
+carriers, and that reading is the more valuable one.
+
+Construction labels are exact **by offset** — `fill` accumulates them, so `text[start:end]`
+always equals the span. Nothing checks they are correct **by semantics**, and they are
+frequently not:
+
+| construction's label | the prose it sits in |
+|---|---|
+| `AGE` = `46` | "please settle it within **46** days" |
+| `AGE` = `27` | "last seen at the sorting facility at **27** hours" |
+| `AGE` = `25` | "amount $**25**" |
+| `AGE` = `57` | "status **57**" |
+| `DATE_OF_BIRTH` = `20/12/1961` | "the claim filed on **20/12/1961**" |
+| `DATE_OF_BIRTH` = `1980-02-17` | "the effective date is **1980-02-17**" |
+
+None is the entity its label claims. Training on them teaches that any small integer is an
+age and any date is a date of birth — a precision failure manufactured deliberately, in a
+corpus whose entire purpose is to fix a precision/recall frontier.
+
+The teacher catches these because it labels the text without knowing what was injected, so
+it silently declines them. It declines `AGE` at **0.593** and `DATE_OF_BIRTH` at **0.689**,
+having scored **1.000 exact recall on both** against the frozen gold set — so on these two
+types the disagreement is evidence about the carrier, not about the teacher. The asymmetry
+is the point: on `LOCATION` the same signal means the opposite, because there the teacher is
+the one that is wrong (0.273 on test, 0.100 on val, 0.934 miss here). Which side is on trial
+depends on which side has an independent measurement behind it.
+
+Track A and Track B are filled from the same 456 shapes, so a disagreement seen on a Track B
+instance transfers to every Track A record built from that shape. `scripts/audit_carriers.py`
+counts it: **152 of 1,638 Track A records (9.3%)** are built from a (shape, type) pair the
+teacher declines at least half the time. Only 35% of shapes have been audited so far, so the
+true figure is roughly **27%**. Those records are in `data/train_v3.jsonl` today, unflagged.
+
+**So the teacher's value in this engine is as a critic of construction, not as a labeller.**
+That is not what WP-2 was designed to buy, and it is worth more than what it was: P3 says
+distillation added no labels, while the audit says a quarter of the construction corpus may
+carry semantically wrong ones. A verification signal that finds a defect in the other track
+is a better outcome than the one predicted, and it was only observable because the two tracks
+share carriers and the anchor compares them.
+
+Not yet done, and not to be claimed until it is: filtering or repairing the affected Track A
+records, and constraining carrier generation so `{{AGE}}` and `{{DATE_OF_BIRTH}}` cannot land
+in slots the prose reads as a duration, an amount, a status code or a filing date.
+
+### P1 failed for the same reason
+
+The k=3 self-consistency gate accepted **205 of 205** — the teacher agrees with itself.
+Every rejection came from the construction anchor, at 0.424 against a 0.60 prediction. But
+having read the examples above, a meaningful share of those rejections are the anchor
+working correctly on records where **construction** was wrong, not the teacher. The accept
+rate is therefore not a clean measure of teacher quality, and P1 as written conflated the
+two. It is recorded as failed because that is what it predicted and what was measured, but
+the number should not be quoted as "the teacher is unreliable 58% of the time."
 
 ### P5 — mechanical targets: two met, one blocked
 
@@ -329,17 +415,7 @@ different distribution from the single-record prompt every measurement in this A
 taken under, and adopting it without re-measuring would repeat exactly the mismatch caught
 in "Two things found while building" above.
 
-### P1–P4 — unresolved
-
-Five Track B records have cleared k=3 so far. The gate is at least discriminating rather
-than rubber-stamping (one record came back at agreement 0.89, and the construction anchor
-rejected three of five for a missing `LOCATION`, a missing `STREET_ADDRESS`, and a `PERSON`
-boundary disagreement), but n=5 cannot support a claim about an accept rate, a miss rate, or
-a discovery rate. **P1, P2, P3 and P4 stay open.** P3 in particular — whether the teacher
-finds anything in its own prose that construction did not inject — is the prediction that
-decides whether this ADR was worth doing, and it currently reads 0 spans on 2 accepted
-records, which is a number with no power behind it.
-
-`make train-v3` resumes from the cache. The outcome section will be completed against
-P1–P4 when the accepted-record count can carry them, including if it says Track B was not
-worth its request budget.
+`make train-v3` resumes from the cache; `make train-v3-card` regenerates the corpus and card
+mid-run, and `make carrier-audit` re-runs the audit above as more shapes are covered. The
+numbers here are at 205 records and will move; the two failed predictions will not, since a
+discovery rate of exactly zero does not become positive with more of the same.

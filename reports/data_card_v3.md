@@ -5,7 +5,7 @@
 **Contract:** `contracts/pii_redaction_v2.yaml` · **Decision record:** `docs/adr/0015-teacher-labelled-data-engine.md`
 
 
-> **Status: PARTIAL — do not train on this file expecting a distilled corpus.** Track B is **0.1%** of records against a ≥40% target: 5 of 2618 planned Track B records have been labelled (0.2%). Track A is complete and is exact by construction, so what exists is a large, carrier-diverse *construction* corpus with a distilled fraction still accumulating.
+> **Status: PARTIAL — do not train on this file expecting a distilled corpus.** Track B is **5.2%** of records against a ≥40% target: 205 of 2618 planned Track B records have been labelled (7.8%). Track A is complete and is exact by construction, so what exists is a large, carrier-diverse *construction* corpus with a distilled fraction still accumulating.
 >
 > The limit is **requests, not tokens**. The teacher tier answers an exhausted hourly allowance with `retry-after: 3600`, and at k=3 this engine spends three requests per Track B record — 7854 for the full set. Re-run `make train-v3` to continue; it resumes from the cache and costs nothing for work already done, and `make train-v3-card` regenerates this file at any point mid-run.
 
@@ -15,37 +15,37 @@
 | | records | spans | spans/record |
 |---|---|---|---|
 | Track A — construction | 1594 | 4757 | 2.98 |
-| Track B — distillation | 2 | 5 | 2.50 |
-| **total** | 1596 | 4762 | 2.98 |
+| Track B — distillation | 87 | 253 | 2.91 |
+| **total** | 1681 | 5010 | 2.98 |
 
-- Track B share: **0.1%** of records (2/1596); target was ≥40%.
+- Track B share: **5.2%** of records (87/1681); target was ≥40%.
 - Distinct carrier shapes in the written file: **456**; target was ≥300.
   For comparison: `data/gold/test.jsonl` uses 109, `data/train_v2.jsonl` 208.
-- Records per shape: 3.5.
-- High-severity (validator-owned) spans: 471/4762 = **9.9%** of the corpus. In `train_v2.jsonl` the same nine types were 38.8%. They are down-weighted, not removed: `forge/validators.py` already detects them at 1.0000 recall and 1.0000 precision (ADR 0012), but removing them from the label set would change what G1 measures, which is a contract decision this ADR does not make.
+- Records per shape: 3.7.
+- High-severity (validator-owned) spans: 492/5010 = **9.8%** of the corpus. In `train_v2.jsonl` the same nine types were 38.8%. They are down-weighted, not removed: `forge/validators.py` already detects them at 1.0000 recall and 1.0000 precision (ADR 0012), but removing them from the label set would change what G1 measures, which is a contract decision this ADR does not make.
 
 ## 2. Per-type coverage
 
 | type | owner | total | Track A | Track B | train_v2 | test |
 |---|---|---|---|---|---|---|
-| `PERSON` | model ★ | 1721 | 1719 | 2 | 526 | 175 |
-| `LOCATION` | model ★ | 628 | 628 | 0 | 48 | 22 |
-| `STREET_ADDRESS` | model ★ | 493 | 492 | 1 | 71 | 32 |
-| `DATE_OF_BIRTH` | model | 316 | 316 | 0 | 35 | 25 |
-| `EMAIL` | model | 240 | 240 | 0 | 55 | 65 |
-| `USERNAME` | model ★ | 216 | 216 | 0 | 72 | 42 |
-| `PHONE` | model | 197 | 196 | 1 | 44 | 35 |
-| `URL` | model | 193 | 192 | 1 | 24 | 21 |
-| `IP_ADDRESS` | model | 144 | 144 | 0 | 26 | 28 |
-| `AGE` | model ★ | 143 | 143 | 0 | 29 | 18 |
-| `CREDIT_CARD` | validator | 104 | 104 | 0 | 85 | 41 |
-| `PAN` | validator | 68 | 68 | 0 | 95 | 29 |
-| `API_KEY` | validator | 68 | 68 | 0 | 58 | 29 |
-| `AADHAAR` | validator | 56 | 56 | 0 | 85 | 29 |
-| `BANK_ACCOUNT` | validator | 52 | 52 | 0 | 84 | 29 |
-| `PASSWORD` | validator | 52 | 52 | 0 | 56 | 19 |
-| `DRIVER_LICENSE` | validator | 39 | 39 | 0 | 76 | 15 |
-| `SSN` | validator | 28 | 28 | 0 | 12 | 18 |
+| `PERSON` | model ★ | 1822 | 1719 | 103 | 526 | 175 |
+| `LOCATION` | model ★ | 634 | 628 | 6 | 48 | 22 |
+| `STREET_ADDRESS` | model ★ | 520 | 492 | 28 | 71 | 32 |
+| `DATE_OF_BIRTH` | model | 325 | 316 | 9 | 35 | 25 |
+| `EMAIL` | model | 265 | 240 | 25 | 55 | 65 |
+| `USERNAME` | model ★ | 229 | 216 | 13 | 72 | 42 |
+| `PHONE` | model | 212 | 196 | 16 | 44 | 35 |
+| `URL` | model | 210 | 192 | 18 | 24 | 21 |
+| `IP_ADDRESS` | model | 156 | 144 | 12 | 26 | 28 |
+| `AGE` | model ★ | 145 | 143 | 2 | 29 | 18 |
+| `CREDIT_CARD` | validator | 108 | 104 | 4 | 85 | 41 |
+| `API_KEY` | validator | 73 | 68 | 5 | 58 | 29 |
+| `PAN` | validator | 70 | 68 | 2 | 95 | 29 |
+| `AADHAAR` | validator | 57 | 56 | 1 | 85 | 29 |
+| `BANK_ACCOUNT` | validator | 55 | 52 | 3 | 84 | 29 |
+| `PASSWORD` | validator | 55 | 52 | 3 | 56 | 19 |
+| `DRIVER_LICENSE` | validator | 40 | 39 | 1 | 76 | 15 |
+| `SSN` | validator | 30 | 28 | 2 | 12 | 18 |
 | `PASSPORT` | validator | 4 | 4 | 0 | 38 | 23 |
 
 ★ = Track B focus type: model-owned and measurably failing.
@@ -58,24 +58,27 @@ Labels are exact by construction (offsets accumulated during the fill, `forge/ca
 
 ### Track B — distillation
 
-2618 records planned; 5 received k=3 teacher samples (5 in cache).
+2618 records planned; 205 received k=3 teacher samples (205 in cache).
 
 | stage | outcome | n | rate |
 |---|---|---|---|
-| self-consistency + schema (`forge/verify.py`) | accepted | 5 | 100.0% |
-| construction anchor | rejected — `anchor_missing` | 2 | 40.0% |
-| construction anchor | rejected — `anchor_boundary` | 1 | 20.0% |
-| **final** | **accepted** | **2** | **40.0%** |
+| self-consistency + schema (`forge/verify.py`) | accepted | 205 | 100.0% |
+| construction anchor | rejected — `anchor_missing` | 112 | 54.6% |
+| construction anchor | rejected — `anchor_boundary` | 6 | 2.9% |
+| **final** | **accepted** | **87** | **42.4%** |
 
 **What the construction anchor caught.** The teacher never sees the injected labels; these are disagreements between its independent k=3 consensus and ground truth we already hold.
 
 | type | teacher missed it entirely | teacher chose a different boundary |
 |---|---|---|
-| `PERSON` | 0 | 1 |
-| `LOCATION` | 1 | 0 |
-| `STREET_ADDRESS` | 1 | 0 |
+| `LOCATION` | 85 | 0 |
+| `DATE_OF_BIRTH` | 31 | 0 |
+| `STREET_ADDRESS` | 7 | 11 |
+| `AGE` | 16 | 2 |
+| `PERSON` | 0 | 6 |
+| `USERNAME` | 3 | 0 |
 
-Validator-owned spans repaired from construction rather than rejected (ADR 0012 — the deterministic layer is the authority on these): 0 spans, {}.
+Validator-owned spans repaired from construction rather than rejected (ADR 0012 — the deterministic layer is the authority on these): 61 spans, {'API_KEY': 11, 'AADHAAR': 7, 'CREDIT_CARD': 15, 'PAN': 7, 'BANK_ACCOUNT': 6, 'PASSWORD': 8, 'SSN': 4, 'DRIVER_LICENSE': 3}.
 
 Entities the teacher found in its own prose that were **not** injected — the genuinely distilled signal, resting on the k=3 consensus alone: 0 spans, {}.
 
@@ -119,4 +122,4 @@ python scripts/build_train_v3.py --api-key-env CEREBRAS_API_KEY \
 
 Seeds: carriers 7717, fill/instantiation 7717. Teacher: `gpt-oss-120b` at temperature 0.7, k=3, reasoning effort `low`.
 
-Teacher tokens: 49178 for carrier generation (56 calls), plus k=3 labelling calls for 5 Track B records.
+Teacher tokens: 49178 for carrier generation (56 calls), plus k=3 labelling calls for 205 Track B records.

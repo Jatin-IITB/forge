@@ -38,7 +38,7 @@ PYTHON   ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || command 
 
 .PHONY: help install validate gold gold-sample validation infer teacher-baseline \
         data-engine carriers train-v3 train-v3-card teacher-types \
-        teacher-prompt-probe train eval economics \
+        teacher-prompt-probe carrier-audit train eval economics \
         error-analysis merge gguf report audit test lint forge clean-preds
 
 help:
@@ -53,6 +53,7 @@ help:
 	@echo "  make train-v3         # WP-2 stage 2: fill + teacher-label -> data/train_v3.jsonl"
 	@echo "  make train-v3-card    # rebuild train_v3 + its data card from cache, no API calls"
 	@echo "  make teacher-types    # per-type teacher-vs-student headroom (ADR 0015 evidence)"
+	@echo "  make carrier-audit    # use Track B disagreements to audit Track A labels"
 	@echo "  make train            # LoRA SFT on verified training data"
 	@echo "  make infer            # run the student over the test set"
 	@echo "  make eval             # score PREDS against GOLD, check contract gates"
@@ -141,6 +142,13 @@ train-v3-card:
 teacher-types:
 	$(PYTHON) scripts/analyse_teacher_types.py --gold $(GOLD) \
 		--json reports/teacher_type_analysis.json
+
+# Reads Track B's teacher disagreements as an audit of Track A's construction
+# labels: same 456 carrier shapes feed both tracks, so a disagreement seen on a
+# Track B instance transfers to every Track A record built from that shape.
+carrier-audit:
+	PYTHONPATH=scripts $(PYTHON) scripts/audit_carriers.py --carriers $(CARRIERS) \
+		--total $(TRAIN_V3_TOTAL) --json reports/carrier_audit.json
 
 teacher-prompt-probe:
 	$(PYTHON) scripts/probe_teacher_prompt.py --split data/gold/val.jsonl \
