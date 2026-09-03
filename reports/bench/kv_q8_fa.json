@@ -1,0 +1,77 @@
+{
+  "config_name": "kv_q8_fa",
+  "backend": "openai",
+  "model": "m",
+  "quant": "Q8_0",
+  "concurrency": 32,
+  "max_tokens": 1024,
+  "temperature": 0.0,
+  "gold": "data/gold/test.jsonl",
+  "n_records": 385,
+  "n_ok": 385,
+  "errors": 0,
+  "schema_valid": 385,
+  "wall_clock_s": 383.9991,
+  "sustained_s_per_record": 0.9974,
+  "records_per_s": 1.0026,
+  "usd_per_1k": 0.038661,
+  "cost_breakdown": {
+    "usd_per_1k": 0.038661,
+    "hardware_usd_per_1k": 0.037929,
+    "energy_usd_per_1k": 0.000731,
+    "machine_hours_per_1k": 0.277056,
+    "hardware_usd_per_hour": 0.136901,
+    "watts": 22.0
+  },
+  "latency": {
+    "mean_s": 30.2821,
+    "p50_s": 26.6578,
+    "p90_s": 52.8628,
+    "p95_s": 58.7793,
+    "p99_s": 71.5413,
+    "min_s": 9.1548,
+    "max_s": 85.5312
+  },
+  "tokens": {
+    "prompt_total": 112558,
+    "completion_total": 19670,
+    "prompt_per_record": 292.36,
+    "completion_per_record": 51.09,
+    "output_tok_s_aggregate": 51.22,
+    "total_tok_s_aggregate": 344.34
+  },
+  "avg_latency_s": 0.9974,
+  "avg_latency_s_basis": "wall_clock / n_records (machine-seconds per record)",
+  "mean_request_latency_s": 30.2821,
+  "p50_latency_s": 26.6578,
+  "p95_latency_s": 58.7793,
+  "total": 385,
+  "total_tokens_in": 112558,
+  "total_tokens_out": 19670,
+  "adapter": null,
+  "env": {
+    "platform": "macOS-26.3.1-arm64-arm-64bit",
+    "machine": "arm64",
+    "cpu": "Apple M1",
+    "ram_gb": 16.0,
+    "python": "3.12.13",
+    "server_cmd": null,
+    "llama_cpp_commit": null
+  },
+  "contention_at_start": {
+    "loadavg_1m": 4.74,
+    "loadavg_5m": 4.61,
+    "loadavg_15m": 4.64,
+    "swapusage": "total = 6144.00M  used = 5306.62M  free = 837.38M  (encrypted)",
+    "ncpu": "8"
+  },
+  "contention_at_end": {
+    "loadavg_1m": 4.32,
+    "loadavg_5m": 5.13,
+    "loadavg_15m": 4.89,
+    "swapusage": "total = 6144.00M  used = 5266.62M  free = 877.38M  (encrypted)",
+    "ncpu": "8"
+  },
+  "timestamp": "2026-09-03T16:01:09+0530",
+  "repeat_passes": 1
+}

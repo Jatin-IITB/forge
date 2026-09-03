@@ -1,0 +1,77 @@
+{
+  "config_name": "kv_baseline",
+  "backend": "openai",
+  "model": "m",
+  "quant": "Q8_0",
+  "concurrency": 32,
+  "max_tokens": 1024,
+  "temperature": 0.0,
+  "gold": "data/gold/test.jsonl",
+  "n_records": 385,
+  "n_ok": 385,
+  "errors": 0,
+  "schema_valid": 384,
+  "wall_clock_s": 321.9605,
+  "sustained_s_per_record": 0.83626,
+  "records_per_s": 1.1958,
+  "usd_per_1k": 0.032415,
+  "cost_breakdown": {
+    "usd_per_1k": 0.032415,
+    "hardware_usd_per_1k": 0.031801,
+    "energy_usd_per_1k": 0.000613,
+    "machine_hours_per_1k": 0.232295,
+    "hardware_usd_per_hour": 0.136901,
+    "watts": 22.0
+  },
+  "latency": {
+    "mean_s": 24.6588,
+    "p50_s": 21.2469,
+    "p90_s": 42.9356,
+    "p95_s": 47.3506,
+    "p99_s": 54.3923,
+    "min_s": 7.3968,
+    "max_s": 67.0639
+  },
+  "tokens": {
+    "prompt_total": 112558,
+    "completion_total": 19787,
+    "prompt_per_record": 292.36,
+    "completion_per_record": 51.39,
+    "output_tok_s_aggregate": 61.46,
+    "total_tok_s_aggregate": 411.06
+  },
+  "avg_latency_s": 0.83626,
+  "avg_latency_s_basis": "wall_clock / n_records (machine-seconds per record)",
+  "mean_request_latency_s": 24.6588,
+  "p50_latency_s": 21.2469,
+  "p95_latency_s": 47.3506,
+  "total": 385,
+  "total_tokens_in": 112558,
+  "total_tokens_out": 19787,
+  "adapter": null,
+  "env": {
+    "platform": "macOS-26.3.1-arm64-arm-64bit",
+    "machine": "arm64",
+    "cpu": "Apple M1",
+    "ram_gb": 16.0,
+    "python": "3.12.13",
+    "server_cmd": null,
+    "llama_cpp_commit": null
+  },
+  "contention_at_start": {
+    "loadavg_1m": 1.81,
+    "loadavg_5m": 2.47,
+    "loadavg_15m": 4.05,
+    "swapusage": "total = 6144.00M  used = 4810.62M  free = 1333.38M  (encrypted)",
+    "ncpu": "8"
+  },
+  "contention_at_end": {
+    "loadavg_1m": 6.13,
+    "loadavg_5m": 5.57,
+    "loadavg_15m": 4.95,
+    "swapusage": "total = 6144.00M  used = 5330.62M  free = 813.38M  (encrypted)",
+    "ncpu": "8"
+  },
+  "timestamp": "2026-09-03T15:47:20+0530",
+  "repeat_passes": 1
+}

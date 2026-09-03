@@ -1,0 +1,46 @@
+{
+  "arms": [
+    {
+      "name": "unconstrained",
+      "micro_f1": 0.6359832635983264,
+      "ci_lo": 0.5958311170212766,
+      "ci_hi": 0.6747316621416409,
+      "micro_precision": 0.6170500676589986,
+      "micro_recall": 0.6561151079136691,
+      "schema_valid": 384,
+      "n": 385,
+      "schema_rate": 0.9974025974025974,
+      "tokens_per_record": 51.394805194805194,
+      "wall_s": 499.97532633296214,
+      "s_per_record": 1.298637211254447
+    },
+    {
+      "name": "grammar_permissive",
+      "micro_f1": 0.6198125836680054,
+      "ci_lo": 0.5787687067767645,
+      "ci_hi": 0.659547124544737,
+      "micro_precision": 0.5794743429286608,
+      "micro_recall": 0.6661870503597123,
+      "schema_valid": 385,
+      "n": 385,
+      "schema_rate": 1.0,
+      "tokens_per_record": 52.077922077922075,
+      "wall_s": 445.0665290830657,
+      "s_per_record": 1.1560169586573135
+    },
+    {
+      "name": "grammar_exact",
+      "micro_f1": 0.6198125836680054,
+      "ci_lo": 0.5787687067767645,
+      "ci_hi": 0.659547124544737,
+      "micro_precision": 0.5794743429286608,
+      "micro_recall": 0.6661870503597123,
+      "schema_valid": 385,
+      "n": 385,
+      "schema_rate": 1.0,
+      "tokens_per_record": 52.077922077922075,
+      "wall_s": 418.1557050838601,
+      "s_per_record": 1.0861187145035327
+    }
+  ]
+}

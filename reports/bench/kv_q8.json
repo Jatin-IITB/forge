@@ -1,0 +1,77 @@
+{
+  "config_name": "kv_q8",
+  "backend": "openai",
+  "model": "m",
+  "quant": "Q8_0",
+  "concurrency": 32,
+  "max_tokens": 1024,
+  "temperature": 0.0,
+  "gold": "data/gold/test.jsonl",
+  "n_records": 385,
+  "n_ok": 385,
+  "errors": 0,
+  "schema_valid": 385,
+  "wall_clock_s": 407.1615,
+  "sustained_s_per_record": 1.05756,
+  "records_per_s": 0.9456,
+  "usd_per_1k": 0.040992,
+  "cost_breakdown": {
+    "usd_per_1k": 0.040992,
+    "hardware_usd_per_1k": 0.040217,
+    "energy_usd_per_1k": 0.000776,
+    "machine_hours_per_1k": 0.293767,
+    "hardware_usd_per_hour": 0.136901,
+    "watts": 22.0
+  },
+  "latency": {
+    "mean_s": 31.7346,
+    "p50_s": 25.9812,
+    "p90_s": 55.9148,
+    "p95_s": 71.6652,
+    "p99_s": 87.8064,
+    "min_s": 9.8287,
+    "max_s": 191.4552
+  },
+  "tokens": {
+    "prompt_total": 112558,
+    "completion_total": 19982,
+    "prompt_per_record": 292.36,
+    "completion_per_record": 51.9,
+    "output_tok_s_aggregate": 49.08,
+    "total_tok_s_aggregate": 325.52
+  },
+  "avg_latency_s": 1.05756,
+  "avg_latency_s_basis": "wall_clock / n_records (machine-seconds per record)",
+  "mean_request_latency_s": 31.7346,
+  "p50_latency_s": 25.9812,
+  "p95_latency_s": 71.6652,
+  "total": 385,
+  "total_tokens_in": 112558,
+  "total_tokens_out": 19982,
+  "adapter": null,
+  "env": {
+    "platform": "macOS-26.3.1-arm64-arm-64bit",
+    "machine": "arm64",
+    "cpu": "Apple M1",
+    "ram_gb": 16.0,
+    "python": "3.12.13",
+    "server_cmd": null,
+    "llama_cpp_commit": null
+  },
+  "contention_at_start": {
+    "loadavg_1m": 5.88,
+    "loadavg_5m": 5.53,
+    "loadavg_15m": 4.94,
+    "swapusage": "total = 6144.00M  used = 5330.62M  free = 813.38M  (encrypted)",
+    "ncpu": "8"
+  },
+  "contention_at_end": {
+    "loadavg_1m": 5.07,
+    "loadavg_5m": 4.67,
+    "loadavg_15m": 4.66,
+    "swapusage": "total = 6144.00M  used = 5306.62M  free = 837.38M  (encrypted)",
+    "ncpu": "8"
+  },
+  "timestamp": "2026-09-03T15:54:26+0530",
+  "repeat_passes": 1
+}
