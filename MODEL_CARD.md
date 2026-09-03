@@ -101,19 +101,21 @@ student finished training, so the parity threshold cannot be back-fitted:
 |---|---|---|
 | micro-F1 | **0.9482** | [0.9305, 0.9641] |
 | micro-precision / recall | 0.9615 / 0.9353 | — |
-| p50 latency | 0.59 s | — |
-| p95 latency | 8.02 s | ⚠️ **not reproducible — see below** |
+| p50 latency | **0.492 s** | — |
+| p95 latency | **1.364 s** | [0.952, 1.872] |
 
-**⇒ G1 requires student micro-F1 ≥ 0.9292.**
+**⇒ G1 requires student micro-F1 ≥ 0.9292; G4 requires student p95 ≤ 0.2728 s.**
 
-**G4's threshold is unsound as published.** Two runs of the identical teacher
-configuration report p95 = 0.790 s (n=60) and 8.024 s (n=302), while their p50s
-agree within 14%. The 60-sample p95 interval is [0.689, 1.054], so 8.024 sits
-7.6× above it — not sampling noise, but episodic congestion on shared free-tier
-capacity during a longer run. Since G4 is defined as `teacher_p95 / 5`, the gate
-inherits that instability: a clean p95 near 0.8 s makes the real target
-**≤ 0.16 s**, not the ≤ 1.60 s previously published. A re-measurement is in
-flight. See `reports/measurement_integrity.md` §4.
+**The previously published teacher p95 of 8.024 s is withdrawn.** It came from a
+302-record run predating the `latencies_s` field, so its percentiles were computed
+from whichever resumed segment ran last rather than the pooled distribution, and it
+ran during episodic free-tier congestion — the per-call vector was never stored, so
+it cannot be audited. A clean full re-measurement (385 records, 0 errors, pooled
+percentiles, vector retained) gives **1.364 s**, which is outside the interval of
+both earlier estimates.
+
+**This moved G4 against us by 5.9×**, from ≤ 1.605 s to **≤ 0.2728 s**. See
+`reports/measurement_integrity.md` §4 and ADR 0014.
 
 ### Gate table
 
@@ -131,7 +133,7 @@ that passes G2, so neither artifact dominates.
 | G3 cost per 1k | ≤ $0.01594 | **$0.03004** — **0.189×** teacher | ❌ **FAIL** by 1.89× (±30% machine variance) |
 | G4 p95 latency | ≤ 0.2728 s | **5.413 s** — **3.97×** teacher | ❌ **FAIL** — *below the hardware floor* |
 | G5 deployability | laptop, quantized | 1647 MB file / 3080 MB RSS, fully local on a 16 GB M1 | ✅ **PASS** |
-| G6 safety / OOD | ≥ 0.90 | 31-probe set built; not re-scored on the shipped artifact | ⏸ pending |
+| G6 safety / OOD | ≥ 0.90 both rates | OOD **0.5714** / adversarial **0.9000** (system) | ❌ **FAIL** — OOD short; adversarial clears |
 | High-severity recall (pooled) | ≥ 0.99 on 9 types | **1.0000**, 571 instances, 0 misses, bound **0.9948** | ✅ **PASS** |
 | High-severity precision | — *(not gated)* | **1.0000**, 0 false positives across 571 | ✅ |
 | High-severity recall (per type) | ≥ 0.99 each | 1.0000 each, but n=15–41 supports only 0.819–0.930 | ⚠️ **not measurable** |
