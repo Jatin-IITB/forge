@@ -1,0 +1,77 @@
+{
+  "config_name": "q4km-np16-c8",
+  "backend": "openai",
+  "model": "m",
+  "quant": "Q4_K_M",
+  "concurrency": 8,
+  "max_tokens": 1024,
+  "temperature": 0.0,
+  "gold": "data/gold/test.jsonl",
+  "n_records": 48,
+  "n_ok": 48,
+  "errors": 0,
+  "schema_valid": 48,
+  "wall_clock_s": 67.11,
+  "sustained_s_per_record": 1.39813,
+  "records_per_s": 0.7152,
+  "usd_per_1k": 0.054193,
+  "cost_breakdown": {
+    "usd_per_1k": 0.054193,
+    "hardware_usd_per_1k": 0.053168,
+    "energy_usd_per_1k": 0.001025,
+    "machine_hours_per_1k": 0.388368,
+    "hardware_usd_per_hour": 0.136901,
+    "watts": 22.0
+  },
+  "latency": {
+    "mean_s": 10.5642,
+    "p50_s": 10.2381,
+    "p90_s": 13.4194,
+    "p95_s": 17.2001,
+    "p99_s": 24.1402,
+    "min_s": 5.511,
+    "max_s": 24.1402
+  },
+  "tokens": {
+    "prompt_total": 13985,
+    "completion_total": 2220,
+    "prompt_per_record": 291.35,
+    "completion_per_record": 46.25,
+    "output_tok_s_aggregate": 33.08,
+    "total_tok_s_aggregate": 241.47
+  },
+  "avg_latency_s": 1.39813,
+  "avg_latency_s_basis": "wall_clock / n_records (machine-seconds per record)",
+  "mean_request_latency_s": 10.5642,
+  "p50_latency_s": 10.2381,
+  "p95_latency_s": 17.2001,
+  "total": 48,
+  "total_tokens_in": 13985,
+  "total_tokens_out": 2220,
+  "adapter": null,
+  "env": {
+    "platform": "macOS-26.3.1-arm64-arm-64bit",
+    "machine": "arm64",
+    "cpu": "Apple M1",
+    "ram_gb": 16.0,
+    "python": "3.12.13",
+    "server_cmd": "llama-server -ngl 99 -c 16384 -np 16",
+    "llama_cpp_commit": "9cffdcc"
+  },
+  "contention_at_start": {
+    "loadavg_1m": 9.3,
+    "loadavg_5m": 8.13,
+    "loadavg_15m": 7.53,
+    "swapusage": "total = 9216.00M  used = 8321.00M  free = 895.00M  (encrypted)",
+    "ncpu": "8"
+  },
+  "contention_at_end": {
+    "loadavg_1m": 4.78,
+    "loadavg_5m": 6.97,
+    "loadavg_15m": 7.14,
+    "swapusage": "total = 9216.00M  used = 8321.00M  free = 895.00M  (encrypted)",
+    "ncpu": "8"
+  },
+  "timestamp": "2026-09-03T03:16:37+0530",
+  "repeat_passes": 1
+}

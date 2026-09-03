@@ -62,9 +62,22 @@ def cmd_merge(args: argparse.Namespace) -> int:
         "adapter": str(args.adapter),
         "merged_dtype": "float16",
     }
-    adapter_meta = args.adapter.parent / "meta.json"
-    if adapter_meta.exists():
-        provenance["training"] = json.loads(adapter_meta.read_text(encoding="utf-8"))
+    # Training runs write `train_meta.json`; only some older ones wrote `meta.json`.
+    # Checking one name silently dropped the training provenance for every run_00N
+    # checkpoint, which is exactly the sort of gap that makes an artifact
+    # unauditable later.
+    for meta_name in ("train_meta.json", "meta.json"):
+        adapter_meta = args.adapter.parent / meta_name
+        if adapter_meta.exists():
+            provenance["training"] = json.loads(adapter_meta.read_text(encoding="utf-8"))
+            provenance["training_meta_source"] = str(adapter_meta)
+            break
+    else:
+        print(
+            f"  [warn] no train_meta.json/meta.json beside {args.adapter} — "
+            "merged artifact will carry no training provenance",
+            file=sys.stderr,
+        )
     (args.output / "forge_provenance.json").write_text(
         json.dumps(provenance, indent=2) + "\n", encoding="utf-8"
     )
@@ -102,6 +115,28 @@ def cmd_gguf(args: argparse.Namespace) -> int:
         )
         return 1
 
+    # Preflight the converter's own imports. llama.cpp's Qwen2 vocab path does
+    #     try: self._set_vocab_sentencepiece()
+    #     except FileNotFoundError: self._set_vocab_gpt2()
+    # so a MISSING sentencepiece module raises ModuleNotFoundError, escapes the
+    # handler, and aborts the conversion — even though Qwen2.5 is a BPE model
+    # that never needed sentencepiece. The traceback points at a tokenizer file
+    # that was never required, so preflight it here with a message that names the
+    # actual fix.
+    missing = [m for m in ("gguf", "sentencepiece")
+               if subprocess.run([sys.executable, "-c", f"import {m}"],
+                                 capture_output=True).returncode != 0]
+    if missing:
+        print(
+            f"convert_hf_to_gguf.py needs: {', '.join(missing)}\n"
+            f"    pip install {' '.join(missing)}\n"
+            "(sentencepiece is required even for BPE models like Qwen2.5 — the\n"
+            " converter's vocab fallback only catches FileNotFoundError, so an\n"
+            " absent module aborts the run instead of falling through to BPE.)",
+            file=sys.stderr,
+        )
+        return 1
+
     args.output.mkdir(parents=True, exist_ok=True)
     f16_path = args.output / "model-f16.gguf"
 
@@ -133,6 +168,7 @@ def cmd_gguf(args: argparse.Namespace) -> int:
         )
         return 1
 
+    artifacts = []
     for quant in args.quant:
         out = args.output / f"model-{quant}.gguf"
         print(f"quantizing -> {quant}")
@@ -142,6 +178,45 @@ def cmd_gguf(args: argparse.Namespace) -> int:
             return q.returncode
         size_mb = out.stat().st_size / 1e6
         print(f"  {out.name}: {size_mb:.0f} MB")
+        artifacts.append((quant, out))
+
+    if args.keep_f16:
+        artifacts.insert(0, ("F16", f16_path))
+
+    # A manifest, so an artifact found on disk months later can still be traced to
+    # the checkpoint and the toolchain that produced it. Sizes and digests are
+    # recorded because "which Q4 file was the gates run against?" is otherwise
+    # unanswerable once a second one exists.
+    manifest = {
+        "source_hf_model": str(args.merged),
+        "llama_cpp": {
+            "path": str(repo),
+            "commit": _git_commit(repo),
+        },
+        "artifacts": [
+            {
+                "quant": quant,
+                "file": p.name,
+                "bytes": p.stat().st_size,
+                "size_mb": round(p.stat().st_size / 1e6, 1),
+                "sha256": _sha256(p),
+            }
+            for quant, p in artifacts
+        ],
+        "verified": False,
+        "verification_note": (
+            "UNVERIFIED. Quantization is not assumed lossless: this artifact does "
+            "not ship until it re-passes the full gate suite against the fp16 "
+            "baseline (reports/quantization_gates.md)."
+        ),
+    }
+    prov = args.merged / "forge_provenance.json"
+    if prov.exists():
+        manifest["merge_provenance"] = json.loads(prov.read_text(encoding="utf-8"))
+    (args.output / "manifest.json").write_text(
+        json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+    )
+    print(f"wrote {args.output / 'manifest.json'}")
 
     if not args.keep_f16:
         f16_path.unlink()
@@ -149,6 +224,26 @@ def cmd_gguf(args: argparse.Namespace) -> int:
     print("\nGGUF artifacts are UNVERIFIED until they re-pass the gates.")
     print("Run them through Ollama or llama-server, then score with run_eval.py.")
     return 0
+
+
+def _git_commit(repo: Path) -> str | None:
+    try:
+        return subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "HEAD"],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _sha256(path: Path) -> str:
+    import hashlib
+
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def cmd_awq(args: argparse.Namespace) -> int:

@@ -1,0 +1,77 @@
+{
+  "config_name": "q4km-kvu-np48-c32",
+  "backend": "openai",
+  "model": "m",
+  "quant": "Q4_K_M",
+  "concurrency": 32,
+  "max_tokens": 1024,
+  "temperature": 0.0,
+  "gold": "data/gold/test.jsonl",
+  "n_records": 128,
+  "n_ok": 128,
+  "errors": 0,
+  "schema_valid": 128,
+  "wall_clock_s": 167.5246,
+  "sustained_s_per_record": 1.30879,
+  "records_per_s": 0.7641,
+  "usd_per_1k": 0.05073,
+  "cost_breakdown": {
+    "usd_per_1k": 0.05073,
+    "hardware_usd_per_1k": 0.04977,
+    "energy_usd_per_1k": 0.00096,
+    "machine_hours_per_1k": 0.363552,
+    "hardware_usd_per_hour": 0.136901,
+    "watts": 22.0
+  },
+  "latency": {
+    "mean_s": 31.6723,
+    "p50_s": 23.5163,
+    "p90_s": 57.1732,
+    "p95_s": 61.782,
+    "p99_s": 75.5882,
+    "min_s": 10.0952,
+    "max_s": 83.4043
+  },
+  "tokens": {
+    "prompt_total": 37391,
+    "completion_total": 6798,
+    "prompt_per_record": 292.12,
+    "completion_per_record": 53.11,
+    "output_tok_s_aggregate": 40.58,
+    "total_tok_s_aggregate": 263.78
+  },
+  "avg_latency_s": 1.30879,
+  "avg_latency_s_basis": "wall_clock / n_records (machine-seconds per record)",
+  "mean_request_latency_s": 31.6723,
+  "p50_latency_s": 23.5163,
+  "p95_latency_s": 61.782,
+  "total": 128,
+  "total_tokens_in": 37391,
+  "total_tokens_out": 6798,
+  "adapter": null,
+  "env": {
+    "platform": "macOS-26.3.1-arm64-arm-64bit",
+    "machine": "arm64",
+    "cpu": "Apple M1",
+    "ram_gb": 16.0,
+    "python": "3.12.13",
+    "server_cmd": "llama-server -ngl 99 -c 49152 -np 48 --kv-unified",
+    "llama_cpp_commit": "9cffdcc"
+  },
+  "contention_at_start": {
+    "loadavg_1m": 2.27,
+    "loadavg_5m": 3.89,
+    "loadavg_15m": 5.42,
+    "swapusage": "total = 9216.00M  used = 8169.00M  free = 1047.00M  (encrypted)",
+    "ncpu": "8"
+  },
+  "contention_at_end": {
+    "loadavg_1m": 15.47,
+    "loadavg_5m": 8.18,
+    "loadavg_15m": 6.81,
+    "swapusage": "total = 9216.00M  used = 8089.00M  free = 1127.00M  (encrypted)",
+    "ncpu": "8"
+  },
+  "timestamp": "2026-09-03T03:30:39+0530",
+  "repeat_passes": 1
+}
