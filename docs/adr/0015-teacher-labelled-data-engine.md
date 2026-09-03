@@ -297,19 +297,23 @@ claiming it now would be the post-hoc gate-setting `SUCCESS.md` forbids.
 
 ## Outcome
 
-**Interim, 2026-09-03, at 205 labelled Track B records (8% of the planned 2,618).
-Generation continues. P1 and P3 have failed; P2 and P4 are confirmed. The finding that
-matters most was not predicted at all.**
+**Interim, 2026-09-03, at 404 labelled Track B records (15% of the planned 2,618) covering
+55% of carrier shapes. Generation continues. P1 and P3 have failed; P2 and P4 are confirmed.
+The finding that matters most was not predicted at all.**
 
 ### Scoreboard
 
 | | prediction | measured | |
 |---|---|---|---|
-| **P1** | Track B accept rate ≥ 0.60 | **0.424** (87/205) | **failed** |
-| **P2** | `LOCATION` most-missed model-owned type, miss rate > 0.25 | **0.934** (85/91), by far the most-missed | confirmed |
-| **P3** | teacher discoveries ≥ 0.15 spans/accepted record | **0.0000** (0 spans over 87 records) | **failed** |
-| **P4** | `STREET_ADDRESS` boundary disagreement ≥ 0.125 | **0.153** (11/72) | confirmed |
-| **P5** | ≥300 shapes / leakage 0 / ≥40% Track B | **456** / **0,0,0,0** / **5.2%** | 2 of 3 |
+| **P1** | Track B accept rate ≥ 0.60 | **0.446** (180/404) | **failed** |
+| **P2** | `LOCATION` most-missed model-owned type, miss rate > 0.25 | **0.953** (161/169), by far the most-missed | confirmed |
+| **P3** | teacher discoveries ≥ 0.15 spans/accepted record | **0.0000** (0 spans over 180 records) | **failed** |
+| **P4** | `STREET_ADDRESS` boundary disagreement ≥ 0.125 | **0.191** (28/147) | confirmed |
+| **P5** | ≥300 shapes / leakage 0 / ≥40% Track B | **456** / **0,0,0,0** / partial | 2 of 3 |
+
+Every rate above is stable against the same table computed at n=205 (P1 0.424, P2 0.934,
+P3 0.0000, P4 0.153), so these are not small-sample artifacts. The one that moved
+meaningfully is `DATE_OF_BIRTH`, and it moved the wrong way — see below.
 
 ### P3 failed, and this ADR said what that means
 
@@ -318,9 +322,10 @@ the consequence stated in advance: *"If this number is near zero, Track B has bo
 diversity and a verification signal but no distilled labels, and the honest conclusion is
 that the engine is construction with extra steps and a teacher bill."*
 
-It is not near zero. It **is** zero. Across 87 accepted records the teacher found not one
+It is not near zero. It **is** zero. Across 180 accepted records the teacher found not one
 entity that construction had not already injected. On this corpus, distillation contributed
-no labels.
+no labels. This is the one result that cannot improve with more generation: a discovery rate
+of exactly zero over 180 records does not become positive with more of the same carriers.
 
 Part of that is self-inflicted and worth naming, because attributing it entirely to the
 teacher would be wrong. The literal-PII screen added earlier the same day strips names,
@@ -353,18 +358,27 @@ age and any date is a date of birth — a precision failure manufactured deliber
 corpus whose entire purpose is to fix a precision/recall frontier.
 
 The teacher catches these because it labels the text without knowing what was injected, so
-it silently declines them. It declines `AGE` at **0.593** and `DATE_OF_BIRTH` at **0.689**,
+it silently declines them. It declines `AGE` at **0.556** and `DATE_OF_BIRTH` at **0.753**,
 having scored **1.000 exact recall on both** against the frozen gold set — so on these two
-types the disagreement is evidence about the carrier, not about the teacher. The asymmetry
-is the point: on `LOCATION` the same signal means the opposite, because there the teacher is
-the one that is wrong (0.273 on test, 0.100 on val, 0.934 miss here). Which side is on trial
-depends on which side has an independent measurement behind it.
+types the disagreement is evidence about the carrier, not about the teacher. `DATE_OF_BIRTH`
+got *worse* between n=205 and n=404 (0.689 → 0.753) as more shapes came under audit, which
+is the direction that argues this is a systematic property of carrier generation rather than
+a handful of unlucky shapes.
+
+The asymmetry is the point: on `LOCATION` the same signal means the opposite, because there
+the teacher is the one that is wrong (0.273 on test, 0.100 on val, 0.953 miss here). And the
+contrast within the model-owned types is what makes the reading credible rather than
+convenient — the teacher declines `PERSON` at **0.002** (1 of 473) and `STREET_ADDRESS` at
+0.088, so it is not indiscriminately refusing to label. It declines exactly the two types
+where the carrier is placing values into slots the prose does not support. Which side is on
+trial depends on which side has an independent measurement behind it, and
+`scripts/audit_carriers.py` takes that as an argument rather than assuming it.
 
 Track A and Track B are filled from the same 456 shapes, so a disagreement seen on a Track B
-instance transfers to every Track A record built from that shape. `scripts/audit_carriers.py`
-counts it: **152 of 1,638 Track A records (9.3%)** are built from a (shape, type) pair the
-teacher declines at least half the time. Only 35% of shapes have been audited so far, so the
-true figure is roughly **27%**. Those records are in `data/train_v3.jsonl` today, unflagged.
+instance transfers to every Track A record built from that shape. The audit counts it:
+**216 of 1,638 Track A records (13.2%)** are built from a (shape, type) pair the teacher
+declines at least half the time, from the 55% of shapes audited so far, extrapolating to
+roughly **24%**. Those records are in `data/train_v3.jsonl` today, unflagged.
 
 **So the teacher's value in this engine is as a critic of construction, not as a labeller.**
 That is not what WP-2 was designed to buy, and it is worth more than what it was: P3 says
@@ -379,8 +393,10 @@ in slots the prose reads as a duration, an amount, a status code or a filing dat
 
 ### P1 failed for the same reason
 
-The k=3 self-consistency gate accepted **205 of 205** — the teacher agrees with itself.
-Every rejection came from the construction anchor, at 0.424 against a 0.60 prediction. But
+The k=3 self-consistency gate accepted **404 of 404** — the teacher agrees with itself, at
+temperature 0.7, without exception. That is worth stating plainly because it means the k=3
+vote is currently buying nothing but a 3× request bill: not one record has been rejected by
+it. Every rejection came from the construction anchor, at 0.446 against a 0.60 prediction. But
 having read the examples above, a meaningful share of those rejections are the anchor
 working correctly on records where **construction** was wrong, not the teacher. The accept
 rate is therefore not a clean measure of teacher quality, and P1 as written conflated the
@@ -415,7 +431,23 @@ different distribution from the single-record prompt every measurement in this A
 taken under, and adopting it without re-measuring would repeat exactly the mismatch caught
 in "Two things found while building" above.
 
+### What the next revision of this engine should change
+
+Three of these are consequences of measurements above, not preferences.
+
+1. **Drop k from 3 to 1, or replace the vote with something that rejects.** The
+   self-consistency gate has accepted 404 of 404. It costs three requests per record against
+   a tier that meters requests, and it has never once been the thing that caught a bad label
+   — the construction anchor catches all of them. At k=1 the same 404 records would have cost
+   1,212 fewer requests, which is most of a day's throughput. If a vote is wanted, it should
+   be over something that actually varies.
+2. **Constrain carrier generation by slot semantics.** `{{AGE}}` must not land in "within
+   ___ days", "at ___ hours", "amount $___" or "status ___"; `{{DATE_OF_BIRTH}}` must not
+   land in "filed on ___" or "effective date is ___". This is the source of the 24%.
+3. **Flag or drop the affected Track A records** before anything trains on this corpus.
+   Neither is done.
+
 `make train-v3` resumes from the cache; `make train-v3-card` regenerates the corpus and card
-mid-run, and `make carrier-audit` re-runs the audit above as more shapes are covered. The
-numbers here are at 205 records and will move; the two failed predictions will not, since a
-discovery rate of exactly zero does not become positive with more of the same.
+mid-run; `make carrier-audit` re-runs the audit as more shapes come under it. The rates here
+are at n=404 and stable against n=205, and P3 will not move: a discovery rate of exactly zero
+over 180 accepted records does not become positive with more of the same carriers.

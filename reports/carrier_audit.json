@@ -1,123 +1,129 @@
 {
-  "track_b_audited": 205,
-  "shapes_audited": 159,
+  "track_b_audited": 404,
+  "shapes_audited": 251,
   "shapes_total": 456,
   "threshold": 0.5,
   "suspect_types": [
     "AGE",
     "DATE_OF_BIRTH"
   ],
-  "suspect_pairs": 40,
+  "suspect_pairs": 56,
   "track_a_total": 1638,
-  "track_a_affected": 152,
-  "track_a_affected_share": 0.0928,
+  "track_a_affected": 216,
+  "track_a_affected_share": 0.1319,
   "per_type": {
     "AADHAAR": {
-      "injected": 7,
+      "injected": 17,
       "declined": 0,
       "rate": 0.0,
       "verdict": "not on trial"
     },
     "AGE": {
-      "injected": 27,
-      "declined": 16,
-      "rate": 0.5926,
+      "injected": 45,
+      "declined": 25,
+      "rate": 0.5556,
       "verdict": "carrier suspect"
     },
     "API_KEY": {
-      "injected": 11,
+      "injected": 20,
       "declined": 0,
       "rate": 0.0,
       "verdict": "not on trial"
     },
     "BANK_ACCOUNT": {
-      "injected": 6,
-      "declined": 0,
-      "rate": 0.0,
-      "verdict": "not on trial"
-    },
-    "CREDIT_CARD": {
       "injected": 15,
       "declined": 0,
       "rate": 0.0,
       "verdict": "not on trial"
     },
+    "CREDIT_CARD": {
+      "injected": 25,
+      "declined": 0,
+      "rate": 0.0,
+      "verdict": "not on trial"
+    },
     "DATE_OF_BIRTH": {
-      "injected": 45,
-      "declined": 31,
-      "rate": 0.6889,
+      "injected": 85,
+      "declined": 64,
+      "rate": 0.7529,
       "verdict": "carrier suspect"
     },
     "DRIVER_LICENSE": {
-      "injected": 3,
-      "declined": 0,
-      "rate": 0.0,
-      "verdict": "not on trial"
-    },
-    "EMAIL": {
-      "injected": 34,
-      "declined": 0,
-      "rate": 0.0,
-      "verdict": "not on trial"
-    },
-    "IP_ADDRESS": {
-      "injected": 21,
-      "declined": 0,
-      "rate": 0.0,
-      "verdict": "not on trial"
-    },
-    "LOCATION": {
-      "injected": 91,
-      "declined": 85,
-      "rate": 0.9341,
-      "verdict": "teacher blind spot (ADR 0015)"
-    },
-    "PAN": {
-      "injected": 7,
-      "declined": 0,
-      "rate": 0.0,
-      "verdict": "not on trial"
-    },
-    "PASSWORD": {
       "injected": 8,
       "declined": 0,
       "rate": 0.0,
       "verdict": "not on trial"
     },
-    "PERSON": {
-      "injected": 238,
+    "EMAIL": {
+      "injected": 64,
       "declined": 0,
       "rate": 0.0,
       "verdict": "not on trial"
     },
+    "IP_ADDRESS": {
+      "injected": 38,
+      "declined": 0,
+      "rate": 0.0,
+      "verdict": "not on trial"
+    },
+    "LOCATION": {
+      "injected": 169,
+      "declined": 161,
+      "rate": 0.9527,
+      "verdict": "teacher blind spot (ADR 0015)"
+    },
+    "PAN": {
+      "injected": 14,
+      "declined": 0,
+      "rate": 0.0,
+      "verdict": "not on trial"
+    },
+    "PASSPORT": {
+      "injected": 1,
+      "declined": 0,
+      "rate": 0.0,
+      "verdict": "not on trial"
+    },
+    "PASSWORD": {
+      "injected": 13,
+      "declined": 0,
+      "rate": 0.0,
+      "verdict": "not on trial"
+    },
+    "PERSON": {
+      "injected": 473,
+      "declined": 1,
+      "rate": 0.0021,
+      "verdict": "not on trial"
+    },
     "PHONE": {
-      "injected": 33,
+      "injected": 52,
       "declined": 0,
       "rate": 0.0,
       "verdict": "not on trial"
     },
     "SSN": {
-      "injected": 4,
+      "injected": 12,
       "declined": 0,
       "rate": 0.0,
       "verdict": "not on trial"
     },
     "STREET_ADDRESS": {
-      "injected": 72,
-      "declined": 7,
-      "rate": 0.0972,
+      "injected": 147,
+      "declined": 13,
+      "rate": 0.0884,
       "verdict": "not on trial"
     },
     "URL": {
-      "injected": 22,
+      "injected": 49,
       "declined": 0,
       "rate": 0.0,
       "verdict": "not on trial"
     },
     "USERNAME": {
-      "injected": 19,
-      "declined": 3,
-      "rate": 0.1579,
+      "injected": 42,
+      "declined": 5,
+      "rate": 0.119,
       "verdict": "not on trial"
     }
   },
