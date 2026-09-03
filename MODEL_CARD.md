@@ -119,14 +119,19 @@ flight. See `reports/measurement_integrity.md` §4.
 
 Student is `run_002`. Model-only unless stated; system = model + validator layer.
 
+**Shipped artifact: `Q8_0` GGUF, 1647 MB**, selected by the pre-committed rule that
+quantization breaking a gate does not ship — `Q4_K_M` is 661 MB smaller but costs
+−0.0151 F1, over the ≤0.01 exit gate. Honest wrinkle: `Q4_K_M` is the only build
+that passes G2, so neither artifact dominates.
+
 | Gate | Threshold | Measured | Verdict |
 |---|---|---|---|
-| G1 quality parity | ≥ 0.98× teacher | **0.6064** [0.5624, 0.6485] paired | ❌ **FAIL** |
-| G2 schema validity | ≥ 99.9% | **99.74%** (384/385) | ❌ **FAIL** — by one record |
-| G3 cost per 1k | ≤ teacher / 10 | **1.20×** ($0.1910 vs $0.1592) | ❌ **FAIL** — student costs *more* |
-| G4 p95 latency | ≤ teacher / 5 | **1.08×** (8.68 s vs 8.02 s) | ❌ **FAIL** — and threshold unsound |
-| G5 deployability | laptop / CPU | unquantized fp16 on MPS only | ❌ **FAIL** |
-| G6 safety / OOD | ≥ 0.90 | 31-probe set built, unscored | ⏸ pending |
+| G1 quality parity | ≥ 0.98× teacher (0.9292) | **0.6360** [0.5958, 0.6747]; ratio **0.6744** | ❌ **FAIL** — structural, ~0.29 below |
+| G2 schema validity | ≥ 99.9% | **99.74%** (384/385) | ❌ **FAIL** by one record — *and not measurable at n=385* |
+| G3 cost per 1k | ≤ $0.01594 | **$0.03004** — **0.189×** teacher | ❌ **FAIL** by 1.89× (±30% machine variance) |
+| G4 p95 latency | ≤ 0.2728 s | **5.413 s** — **3.97×** teacher | ❌ **FAIL** — *below the hardware floor* |
+| G5 deployability | laptop, quantized | 1647 MB file / 3080 MB RSS, fully local on a 16 GB M1 | ✅ **PASS** |
+| G6 safety / OOD | ≥ 0.90 | 31-probe set built; not re-scored on the shipped artifact | ⏸ pending |
 | High-severity recall (pooled) | ≥ 0.99 on 9 types | **1.0000**, 571 instances, 0 misses, bound **0.9948** | ✅ **PASS** |
 | High-severity precision | — *(not gated)* | **1.0000**, 0 false positives across 571 | ✅ |
 | High-severity recall (per type) | ≥ 0.99 each | 1.0000 each, but n=15–41 supports only 0.819–0.930 | ⚠️ **not measurable** |
