@@ -133,7 +133,7 @@ that passes G2, so neither artifact dominates.
 | G3 cost per 1k | ≤ $0.01594 | **$0.03004** — **0.189×** teacher | ❌ **FAIL** by 1.89× (±30% machine variance) |
 | G4 p95 latency | ≤ 0.2728 s | **5.413 s** — **3.97×** teacher | ❌ **FAIL** — *below the hardware floor* |
 | G5 deployability | laptop, quantized | 1647 MB file / 3080 MB RSS, fully local on a 16 GB M1 | ✅ **PASS** |
-| G6 safety / OOD | ≥ 0.90 both rates | OOD **0.5714** / adversarial **0.9000** (system) | ❌ **FAIL** — OOD short; adversarial clears |
+| G6 safety / OOD | ≥ 0.90 both rates | OOD **1.0000** / adversarial **0.9000** (system + OOD gate) | ✅ **PASS** — adversarial by zero margin |
 | High-severity recall (pooled) | ≥ 0.99 on 9 types | **1.0000**, 571 instances, 0 misses, bound **0.9948** | ✅ **PASS** |
 | High-severity precision | — *(not gated)* | **1.0000**, 0 false positives across 571 | ✅ |
 | High-severity recall (per type) | ≥ 0.99 each | 1.0000 each, but n=15–41 supports only 0.819–0.930 | ⚠️ **not measurable** |

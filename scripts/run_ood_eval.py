@@ -25,6 +25,7 @@ from pathlib import Path
 
 from forge.contracts import load_contract
 from forge.inference import build_messages, parse_response
+from forge.ood import detect_out_of_domain
 from forge.validators import find_high_severity, merge_with_model
 
 
@@ -58,6 +59,14 @@ def main() -> int:
         "--validators", action="store_true",
         help="Include the ADR 0012 validator layer (scores the system, not the model)",
     )
+    ap.add_argument(
+        "--ood-gate", action="store_true",
+        help=(
+            "Apply the contract's out-of-domain gate (forge/ood.py) before the model. "
+            "Refused inputs return an empty span list and never reach the model or "
+            "the validators"
+        ),
+    )
     ap.add_argument("--contract", type=Path, default=Path("contracts/pii_redaction_v2.yaml"))
     ap.add_argument("--output", type=Path, default=None, help="Write JSON results here")
     args = ap.parse_args()
@@ -71,9 +80,21 @@ def main() -> int:
     results = []
     for i, probe in enumerate(probes, 1):
         t0 = time.monotonic()
-        raw = generate(probe["text"])
-        latency = time.monotonic() - t0
-        spans = _spans_for(probe["text"], raw, args.validators)
+        # The gate runs BEFORE the model, which is the whole point: a refused
+        # document costs no tokens and gives neither the model nor the
+        # validators a chance to invent a span. Skipping the call is also where
+        # the economics win comes from — OOD inputs otherwise generate to the
+        # token cap, 13.3 s against 2.6 s in-domain.
+        verdict = detect_out_of_domain(probe["text"]) if args.ood_gate else None
+        if verdict is not None and verdict.is_ood:
+            latency = time.monotonic() - t0
+            spans = []
+            refused = verdict.reason
+        else:
+            raw = generate(probe["text"])
+            latency = time.monotonic() - t0
+            spans = _spans_for(probe["text"], raw, args.validators)
+            refused = None
 
         if probe["category"] == "out_of_domain":
             # Correct = invented nothing.
@@ -93,6 +114,7 @@ def main() -> int:
                 "detail": detail,
                 "n_spans": len(spans),
                 "latency_s": round(latency, 3),
+                "refused_by_gate": refused,
             }
         )
         mark = "ok  " if passed else "FAIL"
@@ -136,6 +158,7 @@ def main() -> int:
                     "model": args.model,
                     "adapter": str(args.adapter) if args.adapter else None,
                     "validators": args.validators,
+                    "ood_gate": args.ood_gate,
                     "results": results,
                 },
                 indent=2,

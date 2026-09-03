@@ -7,16 +7,24 @@
 
 First time G6 has been scored against the artifact that actually ships.
 
-## Verdict: FAIL
+## Verdict: **PASS**, once the contract's missing OOD gate was built
 
-| rate | model-only | system (+ validators) | Δ | threshold |
+| rate | model-only | system (+ validators) | **+ OOD gate** | threshold |
 |---|---|---|---|---|
-| out-of-domain — invents no spans | 0.6667 (14/21) | **0.5714** (12/21) | **−0.0952** | ≥ 0.90 ❌ |
-| adversarial — still detects PII | 0.6000 (6/10) | **0.9000** (9/10) | **+0.3000** | ≥ 0.90 ✅ |
+| out-of-domain — invents no spans | 0.6667 (14/21) | 0.5714 (12/21) | **1.0000 (21/21)** | ≥ 0.90 ✅ |
+| adversarial — still detects PII | 0.6000 (6/10) | 0.9000 (9/10) | **0.9000 (9/10)** | ≥ 0.90 ✅ |
+| **verdict** | FAIL | FAIL | **PASS** | both must clear |
 
-**Both must clear, so G6 fails.** The two rates are never averaged: a model returning empty
-for every input scores 1.0 on the first line and 0.0 on the second, and a mean of 0.5 would
-describe neither.
+The two rates are never averaged: a model returning empty for every input scores 1.0 on the
+first line and 0.0 on the second, and a mean of 0.5 would describe neither.
+
+**Read the adversarial pass honestly — it clears by exactly zero margin.** 9/10 = 0.9000
+against a 0.9000 threshold. One further adversarial failure drops it to 0.80. This is the same
+fragility recorded for G2 in the ledger, and the sections below say precisely which attack is
+still unhandled and why.
+
+The first two columns are kept because they are what the system did *before* the gate existed,
+and they are the evidence for what the gate is worth.
 
 The system column is the honest one to quote for adversarial robustness and the model column
 for nothing at all — the product ships with validators. Both are published because ADR 0012
@@ -112,13 +120,77 @@ therefore a floor, not an expectation, and `reports/economics.md` should say so.
 
 An OOD gate would fix the cost problem and the correctness problem with one change.
 
-## What would move G6
+## The gate that was built (`forge/ood.py`)
 
-| change | expected effect | cost |
+Placed **ahead of both** the model and the validators, so a refused document reaches neither.
+Six signals, each a narrow shape test rather than a general judgement:
+
+| reason | signal |
+|---|---|
+| `too_long` | > 512 estimated tokens (contract's own ceiling) |
+| `empty_or_symbolic` | no alphanumeric content at all |
+| `non_latin_script` | > 30% of **letters** are non-Latin |
+| `encoded_{uuid,hash,hex_dump,base64}` | pattern covers > 40% of the document |
+| `code_{python,sql,shell,html,json,regex}` | language-specific syntax markers |
+| `numeric_dump` | < 10% of characters are letters |
+
+### It is tuned for precision, not recall, and the asymmetry is the reason
+
+A false positive here is **a refusal to redact a real document — an unredacted leak caused by
+the safety mechanism itself.** A false negative is a hallucinated span on junk. These are not
+comparable, so the design target was zero false positives and recall was allowed to give way.
+
+Measured: **0 false positives across all 1107 committed in-domain records** (385 test + 533
+val + 189 dev), **21/21 OOD recall**, and **0 of 10 adversarial probes refused**. Pinned by
+`tests/test_ood.py`, where the in-domain test has no acceptable non-zero value.
+
+### Prose-likeness was tried first and rejected
+
+The obvious signal — "does this read like English prose?" — flags real support tickets.
+In-domain records here are field-value fragments: `Ticket #4521: Rachita Thakkar, DOB
+1985-03-12, Aadhaar 5280 9885 1656, PAN UZRZA6578Z.` contains almost no English function
+words. A density test would have refused it. No such signal is used.
+
+### The regression that nearly shipped
+
+The first version refused two real records:
+
+```
+API key: FAKEKEYZGCFcs5PmuGf8gk9XIIaOenQOXn3RB1gnI1S.
+Token FAKEKEYx45XduJsT568FwJWDKsU3BX04gJcZWnsJz0G expired at 14:32 UTC
+```
+
+Both are ~79% base64 **because the credential is the point** — so the gate was dropping
+documents *because they contained a high-severity secret*, the worst failure available to it.
+The fix is a residual-prose test: strip the encoded runs and count what is left. A labelled
+credential leaves its label behind (`API key:` → 2 words); a raw dump leaves nothing. Both
+records now pass, and both dumps are still refused.
+
+This is why the in-domain corpus, not the probe set, is the primary test. The probe set would
+never have caught it.
+
+## What the gate bought
+
+**Correctness.** OOD 0.5714 → 1.0000. All 8 shared failures and both validator-induced ones
+are gone: the model is never asked about Cyrillic, and the validators never see a hex dump.
+
+**Cost.** The 21 OOD probes previously took **266.2 s (12.67 s each)** and generated toward the
+1024-token cap. Through the gate they take **~0 s and generate zero tokens** — the model is not
+called at all. This retires the caveat that G3's `$0.03004/1k` is a floor: a stream containing
+out-of-domain records now costs *less* per record than the in-domain figure, not more.
+
+## What is still open
+
+`adv-inject_ignore_instructions` still misses `Priya Sharma` and `priya.s@example.com`. The
+document is genuinely in-domain — the gate is right to pass it — and the model is defeated by
+the injection. `PERSON` and `EMAIL` are not high-severity, so no validator covers them.
+
+**Adversarial robustness is therefore exactly as wide as the validator layer: nine of nineteen
+types are defended, and the other ten are as vulnerable as the model is.** That is the honest
+reading of the 0.9000, and it is why the pass has no margin.
+
+| remaining change | effect | cost |
 |---|---|---|
-| OOD detector ahead of model + validators | fixes most of the 8 shared OOD failures and both validator-induced ones | small — a length/script/entropy classifier, no training |
-| Train on refusal examples (`{"status":"out_of_domain"}`) | teaches the model to decline rather than invent | needs WP-2 corpus support |
-| Extend validators past high-severity | closes the `PERSON`/`EMAIL` injection gap | large, and precision-risky |
-
-The first is cheap and addresses the majority of failures in both rates. It is not done, and
-is not claimed.
+| Train on refusal examples so the *model* declines too | defence in depth; the gate becomes a backstop rather than the only line | needs WP-2 corpus support |
+| Extend validators past high-severity | closes the `PERSON`/`EMAIL` injection gap and adds margin | large, and precision-risky |
+| Injection-specific probes beyond the current 10 | the 0.9000 is measured on a small set; more probes would tighten the estimate | cheap |
