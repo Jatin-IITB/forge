@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from forge.grammar import spans_gbnf, spans_json_schema
+from forge.grammar import compact_spans_gbnf, spans_gbnf, spans_json_schema
 from forge.schema import PIIType
 
 LLAMA_GRAMMAR_BIN = Path.home() / "llama.cpp" / "build" / "bin" / "test-grammar-parser"
@@ -119,6 +119,30 @@ class TestExactSpacingVariant:
         g = spans_gbnf(exact_spacing=exact)
         for t in PIIType:
             assert f'"\\"{t.value}\\""' in g
+
+
+class TestCompactVariant:
+    def test_minified_shape_and_every_type_are_reachable(self):
+        g = compact_spans_gbnf()
+        assert 'root   ::= "{\\"s\\":" spans "}"' in g
+        assert 'span   ::= "{\\"l\\":" label ",\\"t\\":" string "}"' in g
+        assert "ws" not in g
+        for t in PIIType:
+            assert f'"\\"{t.value}\\""' in g
+
+    def test_empty_list_is_representable(self):
+        assert 'spans  ::= "[]"' in compact_spans_gbnf()
+
+    @pytest.mark.skipif(not LLAMA_GRAMMAR_BIN.exists(), reason="llama.cpp grammar parser not built")
+    def test_llama_cpp_parses_compact_grammar(self):
+        proc = subprocess.run(
+            [str(LLAMA_GRAMMAR_BIN)],
+            input=compact_spans_gbnf(),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert proc.returncode == 0, proc.stderr
 
 
 class TestAcceptedByLlamaCpp:

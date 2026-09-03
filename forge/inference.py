@@ -45,6 +45,34 @@ capitalization, or punctuation.
 - Generic place names used as context (e.g. "weather in Mumbai") are NOT PII.
 """
 
+COMPACT_SYSTEM_PROMPT = """\
+You are a PII (Personally Identifiable Information) detection system.
+
+Given the input text, identify ALL PII entities and return them as a JSON object.
+
+For each PII entity, provide:
+- "l": the PII type (see valid types below)
+- "t": the EXACT substring from the input text (copy-paste, do not rephrase)
+
+Valid PII types:
+PERSON, EMAIL, PHONE, STREET_ADDRESS, USERNAME, URL, IP_ADDRESS,
+LOCATION, DATE_OF_BIRTH, AGE, CREDIT_CARD, BANK_ACCOUNT, SSN,
+AADHAAR, PAN, PASSPORT, DRIVER_LICENSE, PASSWORD, API_KEY
+
+Return format (strict JSON, no markdown, no spaces):
+{"s":[{"l":"PERSON","t":"Jane Doe"}]}
+
+If NO PII is found, return:
+{"s":[]}
+
+Rules:
+- Return ONLY the JSON object, nothing else.
+- The "t" field must be an EXACT substring of the input — do not modify spacing, \
+capitalization, or punctuation.
+- Report every occurrence; do not skip duplicates.
+- Generic place names used as context (e.g. "weather in Mumbai") are NOT PII.
+"""
+
 TEACHER_SYSTEM_PROMPT = """\
 You are a PII (Personally Identifiable Information) detection system used \
 to generate training data. You must be thorough and explain your reasoning.
@@ -79,15 +107,29 @@ capitalization, or punctuation.
 USER_TEMPLATE = "Detect all PII in this text:\n\n{text}"
 
 
-def build_messages(text: str, teacher_mode: bool = False) -> list[dict[str, str]]:
-    prompt = TEACHER_SYSTEM_PROMPT if teacher_mode else SYSTEM_PROMPT
+def build_messages(
+    text: str,
+    teacher_mode: bool = False,
+    *,
+    compact: bool = False,
+) -> list[dict[str, str]]:
+    """Build the chat prompt, optionally requesting the compact serving format."""
+    if teacher_mode and compact:
+        raise ValueError("compact output is only defined for student inference")
+    prompt = (
+        TEACHER_SYSTEM_PROMPT
+        if teacher_mode
+        else COMPACT_SYSTEM_PROMPT
+        if compact
+        else SYSTEM_PROMPT
+    )
     return [
         {"role": "system", "content": prompt},
         {"role": "user", "content": USER_TEMPLATE.format(text=text)},
     ]
 
 
-_SPANS_ALIASES = ("spans", "pii", "entities", "results", "pii_entities", "data")
+_SPANS_ALIASES = ("spans", "s", "pii", "entities", "results", "pii_entities", "data")
 
 
 def _extract_json(raw: str) -> dict:
@@ -118,8 +160,8 @@ def reconstruct_offsets(text: str, raw_spans: list[dict]) -> list[PIISpan]:
     used_positions: set[int] = set()
 
     for raw in raw_spans:
-        label_str = raw.get("label", "")
-        span_text = raw.get("text", "")
+        label_str = raw.get("label", raw.get("l", ""))
+        span_text = raw.get("text", raw.get("t", ""))
         if not span_text or label_str not in VALID_LABELS:
             continue
 

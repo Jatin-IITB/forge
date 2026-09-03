@@ -32,7 +32,16 @@ mkdir -p "$(dirname "$LOGFILE")"
 
 nohup caffeinate -ims "$@" > "$LOGFILE" 2>&1 < /dev/null &
 PID=$!
-disown "$PID" 2>/dev/null || true
 
 echo "$PID" > "${LOGFILE}.pid"
 echo "launched: pid=$PID log=$LOGFILE"
+
+# Automation can opt into waiting while retaining the exact same nohup +
+# caffeinate execution path. Interactive callers keep the historical detached
+# behaviour. Holding the parent open matters in process-isolated runners that
+# reap detached descendants when the launching command exits.
+if [ "${NOHUP_RUN_WAIT:-0}" = "1" ]; then
+    wait "$PID"
+else
+    disown "$PID" 2>/dev/null || true
+fi

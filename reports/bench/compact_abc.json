@@ -1,0 +1,303 @@
+{
+  "experiment": "compact",
+  "repeat_passes": 2,
+  "selection": "best records/s pass per arm; every pass retained below",
+  "server_cmd": "llama-server -m /Users/jatin1.gupta/Downloads/forge/models/pii-1.5b-gguf/model-Q8_0.gguf -ngl 99 -np 32 -c 32768 --mlock",
+  "llama_cpp_commit": "9cffdcc",
+  "arms": [
+    {
+      "name": "verbose_baseline",
+      "pass": 1,
+      "micro_f1": 0.6359832635983264,
+      "ci_lo": 0.5958311170212766,
+      "ci_hi": 0.6747316621416409,
+      "micro_precision": 0.6170500676589986,
+      "micro_recall": 0.6561151079136691,
+      "schema_valid": 384,
+      "n": 385,
+      "schema_rate": 0.9974025974025974,
+      "tokens_per_record": 51.4,
+      "wall_s": 162.6812306251377,
+      "s_per_record": 0.4225486509743836,
+      "records_per_s": 2.3665913917699943,
+      "output_tok_s_aggregate": 121.6427975369777,
+      "usd_per_1k": 0.016378535603847142,
+      "contention_at_start": {
+        "loadavg_1m": 6.36,
+        "loadavg_5m": 5.18,
+        "loadavg_15m": 4.55,
+        "swapusage": "total = 8192.00M  used = 7458.25M  free = 733.75M  (encrypted)",
+        "ncpu": "8"
+      },
+      "contention_at_end": {
+        "loadavg_1m": 12.54,
+        "loadavg_5m": 7.42,
+        "loadavg_15m": 5.5,
+        "swapusage": "total = 9216.00M  used = 8187.94M  free = 1028.06M  (encrypted)",
+        "ncpu": "8"
+      },
+      "passes": [
+        {
+          "name": "verbose_baseline",
+          "pass": 1,
+          "micro_f1": 0.6359832635983264,
+          "ci_lo": 0.5958311170212766,
+          "ci_hi": 0.6747316621416409,
+          "micro_precision": 0.6170500676589986,
+          "micro_recall": 0.6561151079136691,
+          "schema_valid": 384,
+          "n": 385,
+          "schema_rate": 0.9974025974025974,
+          "tokens_per_record": 51.4,
+          "wall_s": 162.6812306251377,
+          "s_per_record": 0.4225486509743836,
+          "records_per_s": 2.3665913917699943,
+          "output_tok_s_aggregate": 121.6427975369777,
+          "usd_per_1k": 0.016378535603847142,
+          "contention_at_start": {
+            "loadavg_1m": 6.36,
+            "loadavg_5m": 5.18,
+            "loadavg_15m": 4.55,
+            "swapusage": "total = 8192.00M  used = 7458.25M  free = 733.75M  (encrypted)",
+            "ncpu": "8"
+          },
+          "contention_at_end": {
+            "loadavg_1m": 12.54,
+            "loadavg_5m": 7.42,
+            "loadavg_15m": 5.5,
+            "swapusage": "total = 9216.00M  used = 8187.94M  free = 1028.06M  (encrypted)",
+            "ncpu": "8"
+          }
+        },
+        {
+          "name": "verbose_baseline",
+          "pass": 2,
+          "micro_f1": 0.6359832635983264,
+          "ci_lo": 0.5958311170212766,
+          "ci_hi": 0.6747316621416409,
+          "micro_precision": 0.6170500676589986,
+          "micro_recall": 0.6561151079136691,
+          "schema_valid": 384,
+          "n": 385,
+          "schema_rate": 0.9974025974025974,
+          "tokens_per_record": 51.394805194805194,
+          "wall_s": 231.89382120897062,
+          "s_per_record": 0.6023216135297939,
+          "records_per_s": 1.6602425972059776,
+          "output_tok_s_aggregate": 85.32784485951865,
+          "usd_per_1k": 0.0233467695836105,
+          "contention_at_start": {
+            "loadavg_1m": 6.29,
+            "loadavg_5m": 6.68,
+            "loadavg_15m": 5.9,
+            "swapusage": "total = 13312.00M  used = 12500.00M  free = 812.00M  (encrypted)",
+            "ncpu": "8"
+          },
+          "contention_at_end": {
+            "loadavg_1m": 7.78,
+            "loadavg_5m": 7.71,
+            "loadavg_15m": 6.54,
+            "swapusage": "total = 14336.00M  used = 13394.56M  free = 941.44M  (encrypted)",
+            "ncpu": "8"
+          }
+        }
+      ]
+    },
+    {
+      "name": "compact_grammar",
+      "pass": 1,
+      "micro_f1": 0.0028694404591104736,
+      "ci_lo": 0.0,
+      "ci_hi": 0.008836524300441826,
+      "micro_precision": 0.5,
+      "micro_recall": 0.0014388489208633094,
+      "schema_valid": 385,
+      "n": 385,
+      "schema_rate": 1.0,
+      "tokens_per_record": 5.109090909090909,
+      "wall_s": 62.15495620900765,
+      "s_per_record": 0.16144144469872118,
+      "records_per_s": 6.194196303595897,
+      "output_tok_s_aggregate": 31.646712023826307,
+      "usd_per_1k": 0.006257680491553204,
+      "contention_at_start": {
+        "loadavg_1m": 12.54,
+        "loadavg_5m": 7.42,
+        "loadavg_15m": 5.5,
+        "swapusage": "total = 9216.00M  used = 8187.94M  free = 1028.06M  (encrypted)",
+        "ncpu": "8"
+      },
+      "contention_at_end": {
+        "loadavg_1m": 8.49,
+        "loadavg_5m": 7.14,
+        "loadavg_15m": 5.52,
+        "swapusage": "total = 11264.00M  used = 10807.12M  free = 456.88M  (encrypted)",
+        "ncpu": "8"
+      },
+      "passes": [
+        {
+          "name": "compact_grammar",
+          "pass": 1,
+          "micro_f1": 0.0028694404591104736,
+          "ci_lo": 0.0,
+          "ci_hi": 0.008836524300441826,
+          "micro_precision": 0.5,
+          "micro_recall": 0.0014388489208633094,
+          "schema_valid": 385,
+          "n": 385,
+          "schema_rate": 1.0,
+          "tokens_per_record": 5.109090909090909,
+          "wall_s": 62.15495620900765,
+          "s_per_record": 0.16144144469872118,
+          "records_per_s": 6.194196303595897,
+          "output_tok_s_aggregate": 31.646712023826307,
+          "usd_per_1k": 0.006257680491553204,
+          "contention_at_start": {
+            "loadavg_1m": 12.54,
+            "loadavg_5m": 7.42,
+            "loadavg_15m": 5.5,
+            "swapusage": "total = 9216.00M  used = 8187.94M  free = 1028.06M  (encrypted)",
+            "ncpu": "8"
+          },
+          "contention_at_end": {
+            "loadavg_1m": 8.49,
+            "loadavg_5m": 7.14,
+            "loadavg_15m": 5.52,
+            "swapusage": "total = 11264.00M  used = 10807.12M  free = 456.88M  (encrypted)",
+            "ncpu": "8"
+          }
+        },
+        {
+          "name": "compact_grammar",
+          "pass": 2,
+          "micro_f1": 0.0028694404591104736,
+          "ci_lo": 0.0,
+          "ci_hi": 0.008836524300441826,
+          "micro_precision": 0.5,
+          "micro_recall": 0.0014388489208633094,
+          "schema_valid": 385,
+          "n": 385,
+          "schema_rate": 1.0,
+          "tokens_per_record": 5.109090909090909,
+          "wall_s": 74.62119808304124,
+          "s_per_record": 0.19382129372218504,
+          "records_per_s": 5.159391833558578,
+          "output_tok_s_aggregate": 26.35980191327201,
+          "usd_per_1k": 0.007512765577862352,
+          "contention_at_start": {
+            "loadavg_1m": 5.33,
+            "loadavg_5m": 6.81,
+            "loadavg_15m": 5.87,
+            "swapusage": "total = 13312.00M  used = 12431.31M  free = 880.69M  (encrypted)",
+            "ncpu": "8"
+          },
+          "contention_at_end": {
+            "loadavg_1m": 6.29,
+            "loadavg_5m": 6.68,
+            "loadavg_15m": 5.9,
+            "swapusage": "total = 13312.00M  used = 12500.00M  free = 812.00M  (encrypted)",
+            "ncpu": "8"
+          }
+        }
+      ]
+    },
+    {
+      "name": "compact_prompt",
+      "pass": 1,
+      "micro_f1": 0.651006711409396,
+      "ci_lo": 0.6130646883868963,
+      "ci_hi": 0.6881386675342909,
+      "micro_precision": 0.7806841046277666,
+      "micro_recall": 0.5582733812949641,
+      "schema_valid": 380,
+      "n": 385,
+      "schema_rate": 0.987012987012987,
+      "tokens_per_record": 28.09090909090909,
+      "wall_s": 142.77562462515198,
+      "s_per_record": 0.370845778247148,
+      "records_per_s": 2.69653871948235,
+      "output_tok_s_aggregate": 75.74822402909511,
+      "usd_per_1k": 0.01437446497237909,
+      "contention_at_start": {
+        "loadavg_1m": 8.49,
+        "loadavg_5m": 7.14,
+        "loadavg_15m": 5.52,
+        "swapusage": "total = 11264.00M  used = 10807.12M  free = 456.88M  (encrypted)",
+        "ncpu": "8"
+      },
+      "contention_at_end": {
+        "loadavg_1m": 5.93,
+        "loadavg_5m": 6.88,
+        "loadavg_15m": 5.68,
+        "swapusage": "total = 13312.00M  used = 12407.31M  free = 904.69M  (encrypted)",
+        "ncpu": "8"
+      },
+      "passes": [
+        {
+          "name": "compact_prompt",
+          "pass": 1,
+          "micro_f1": 0.651006711409396,
+          "ci_lo": 0.6130646883868963,
+          "ci_hi": 0.6881386675342909,
+          "micro_precision": 0.7806841046277666,
+          "micro_recall": 0.5582733812949641,
+          "schema_valid": 380,
+          "n": 385,
+          "schema_rate": 0.987012987012987,
+          "tokens_per_record": 28.09090909090909,
+          "wall_s": 142.77562462515198,
+          "s_per_record": 0.370845778247148,
+          "records_per_s": 2.69653871948235,
+          "output_tok_s_aggregate": 75.74822402909511,
+          "usd_per_1k": 0.01437446497237909,
+          "contention_at_start": {
+            "loadavg_1m": 8.49,
+            "loadavg_5m": 7.14,
+            "loadavg_15m": 5.52,
+            "swapusage": "total = 11264.00M  used = 10807.12M  free = 456.88M  (encrypted)",
+            "ncpu": "8"
+          },
+          "contention_at_end": {
+            "loadavg_1m": 5.93,
+            "loadavg_5m": 6.88,
+            "loadavg_15m": 5.68,
+            "swapusage": "total = 13312.00M  used = 12407.31M  free = 904.69M  (encrypted)",
+            "ncpu": "8"
+          }
+        },
+        {
+          "name": "compact_prompt",
+          "pass": 2,
+          "micro_f1": 0.6555183946488293,
+          "ci_lo": 0.6175266175266175,
+          "ci_hi": 0.6926277608260755,
+          "micro_precision": 0.782435129740519,
+          "micro_recall": 0.5640287769784172,
+          "schema_valid": 380,
+          "n": 385,
+          "schema_rate": 0.987012987012987,
+          "tokens_per_record": 28.28051948051948,
+          "wall_s": 147.58032499998808,
+          "s_per_record": 0.38332551948048854,
+          "records_per_s": 2.608748828815976,
+          "output_tok_s_aggregate": 73.77677207311258,
+          "usd_per_1k": 0.014858195983342511,
+          "contention_at_start": {
+            "loadavg_1m": 5.93,
+            "loadavg_5m": 6.88,
+            "loadavg_15m": 5.68,
+            "swapusage": "total = 13312.00M  used = 12407.31M  free = 904.69M  (encrypted)",
+            "ncpu": "8"
+          },
+          "contention_at_end": {
+            "loadavg_1m": 5.33,
+            "loadavg_5m": 6.81,
+            "loadavg_15m": 5.87,
+            "swapusage": "total = 13312.00M  used = 12431.31M  free = 880.69M  (encrypted)",
+            "ncpu": "8"
+          }
+        }
+      ]
+    }
+  ]
+}

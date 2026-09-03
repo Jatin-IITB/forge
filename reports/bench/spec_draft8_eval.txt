@@ -1,0 +1,89 @@
+loaded 385 gold records, 385 predictions
+
+Metric                              Value
+------------------------------------------
+micro-F1 (primary)                 0.6350
+micro-precision                    0.6165
+micro-recall                       0.6547
+partial-overlap F1                 0.7493
+redaction leak rate                0.1159
+schema validity                    0.9974
+
+records                               385
+gold spans                            695
+pred spans                            738
+
+Type                        P        R       F1    TP    FP    FN  Sev
+----------------------------------------------------------------------
+PERSON                 0.6192   0.8457   0.7150   148    91    27  
+EMAIL                  0.8750   0.9692   0.9197    63     9     2  
+PHONE                  0.7021   0.9429   0.8049    33    14     2  
+STREET_ADDRESS         0.0000   0.0000   0.0000     0    30    32  
+USERNAME               0.3333   0.0476   0.0833     2     4    40  
+URL                    1.0000   0.9524   0.9756    20     0     1  
+IP_ADDRESS             0.8125   0.9286   0.8667    26     6     2  
+LOCATION               0.3830   0.8182   0.5217    18    29     4  
+DATE_OF_BIRTH          0.4583   0.8800   0.6027    22    26     3  
+AGE                    0.7778   0.7778   0.7778    14     4     4  
+CREDIT_CARD            0.5455   0.7317   0.6250    30    25    11  !!!
+BANK_ACCOUNT           1.0000   0.2414   0.3889     7     0    22  !!!
+SSN                    0.8824   0.8333   0.8571    15     2     3  !!!
+AADHAAR                0.1852   0.1724   0.1786     5    22    24  !!!
+PAN                    0.7500   0.4138   0.5333    12     4    17  !!!
+PASSPORT               0.7308   0.8261   0.7755    19     7     4  !!!
+DRIVER_LICENSE         1.0000   0.0667   0.1250     1     0    14  !!!
+PASSWORD               0.5333   0.4211   0.4706     8     7    11  !!!
+API_KEY                0.8000   0.4138   0.5455    12     3    17  !!!
+
+==============================================================
+  MODEL-ONLY vs SYSTEM (model + deterministic validators)
+  ADR 0012 — both are always reported; neither stands alone.
+==============================================================
+                              model-only      system
+  --------------------------------------------------
+  micro-F1                        0.6350      0.7853   (+0.1503)
+  micro-precision                 0.6165      0.7439   (+0.1274)
+  micro-recall                    0.6547      0.8317   (+0.1770)
+  min high-sev recall             0.0667      1.0000   (+0.9333)
+
+  high-severity type          model-only      system
+  --------------------------------------------------
+  AADHAAR                         0.1724      1.0000
+  API_KEY                         0.4138      1.0000
+  BANK_ACCOUNT                    0.2414      1.0000
+  CREDIT_CARD                     0.7317      1.0000
+  DRIVER_LICENSE                  0.0667      1.0000
+  PAN                             0.4138      1.0000
+  PASSPORT                        0.8261      1.0000
+  PASSWORD                        0.4211      1.0000
+  SSN                             0.8333      1.0000
+
+  9/9 high-severity floors pass under the system.
+  G1 parity is measured on model-only; the validator layer
+  carries the high-severity floor.
+
+==============================================================
+  95% BOOTSTRAP CONFIDENCE INTERVALS  (n=10,000 resamples, record-level)
+==============================================================
+  model-only micro-F1       0.6350 [0.5948, 0.6737] 95% CI
+  G1 ratio (paired)         0.6734 [0.6309, 0.7143] 95% CI
+  G1 vs 0.98 threshold      FAIL
+
+  High-severity recall — zero-miss types use the exact binomial
+  lower bound; the bootstrap is degenerate when nothing was missed.
+  type                  n   recall   95% lower bound
+  --------------------------------------------------
+  AADHAAR              29   1.0000            0.9019
+  API_KEY              29   1.0000            0.9019
+  BANK_ACCOUNT         29   1.0000            0.9019
+  CREDIT_CARD          41   1.0000            0.9295
+  DRIVER_LICENSE       15   1.0000            0.8190
+  PAN                  29   1.0000            0.9019
+  PASSPORT             23   1.0000            0.8779
+  PASSWORD             19   1.0000            0.8541
+  SSN                  18   1.0000            0.8467
+  --------------------------------------------------
+  POOLED              232   1.0000            0.9872
+
+  Publishable claim: >=98.7% recall on the 9 high-severity types.
+  The point estimate is 1.0000; the sample supports the bound.

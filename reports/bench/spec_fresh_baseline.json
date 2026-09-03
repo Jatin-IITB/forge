@@ -1,0 +1,79 @@
+{
+  "config_name": "spec_fresh_baseline",
+  "backend": "openai",
+  "model": "m",
+  "quant": "Q8_0",
+  "concurrency": 32,
+  "max_tokens": 1024,
+  "temperature": 0.0,
+  "compact_prompt": false,
+  "compact_grammar": false,
+  "gold": "data/gold/test.jsonl",
+  "n_records": 385,
+  "n_ok": 385,
+  "errors": 0,
+  "schema_valid": 384,
+  "wall_clock_s": 302.9309,
+  "sustained_s_per_record": 0.78683,
+  "records_per_s": 1.2709,
+  "usd_per_1k": 0.030499,
+  "cost_breakdown": {
+    "usd_per_1k": 0.030499,
+    "hardware_usd_per_1k": 0.029922,
+    "energy_usd_per_1k": 0.000577,
+    "machine_hours_per_1k": 0.218565,
+    "hardware_usd_per_hour": 0.136901,
+    "watts": 22.0
+  },
+  "latency": {
+    "mean_s": 22.8249,
+    "p50_s": 20.9154,
+    "p90_s": 34.6369,
+    "p95_s": 42.6016,
+    "p99_s": 51.0088,
+    "min_s": 7.0408,
+    "max_s": 56.7013
+  },
+  "tokens": {
+    "prompt_total": 112558,
+    "completion_total": 19774,
+    "prompt_per_record": 292.36,
+    "completion_per_record": 51.36,
+    "output_tok_s_aggregate": 65.28,
+    "total_tok_s_aggregate": 436.84
+  },
+  "avg_latency_s": 0.78683,
+  "avg_latency_s_basis": "wall_clock / n_records (machine-seconds per record)",
+  "mean_request_latency_s": 22.8249,
+  "p50_latency_s": 20.9154,
+  "p95_latency_s": 42.6016,
+  "total": 385,
+  "total_tokens_in": 112558,
+  "total_tokens_out": 19774,
+  "adapter": null,
+  "env": {
+    "platform": "macOS-26.3.1-arm64-arm-64bit",
+    "machine": "arm64",
+    "cpu": "Apple M1",
+    "ram_gb": 16.0,
+    "python": "3.12.13",
+    "server_cmd": "llama-server -m /Users/jatin1.gupta/Downloads/forge/models/pii-1.5b-gguf/model-Q8_0.gguf -ngl 99 -np 32 -c 32768 --mlock",
+    "llama_cpp_commit": "9cffdcc"
+  },
+  "contention_at_start": {
+    "loadavg_1m": 4.72,
+    "loadavg_5m": 4.26,
+    "loadavg_15m": 4.92,
+    "swapusage": "total = 11264.00M  used = 9577.19M  free = 1686.81M  (encrypted)",
+    "ncpu": "8"
+  },
+  "contention_at_end": {
+    "loadavg_1m": 9.77,
+    "loadavg_5m": 8.57,
+    "loadavg_15m": 6.93,
+    "swapusage": "total = 9216.00M  used = 7631.81M  free = 1584.19M  (encrypted)",
+    "ncpu": "8"
+  },
+  "timestamp": "2026-09-03T19:44:29+0530",
+  "repeat_passes": 2
+}

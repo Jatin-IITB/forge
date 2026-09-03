@@ -39,6 +39,17 @@ def test_build_messages_default_is_not_teacher():
     assert "rationale" not in msgs[0]["content"]
 
 
+def test_build_messages_compact_requests_minified_keys():
+    msgs = build_messages("Hello world", compact=True)
+    assert '{"s":[{"l":"PERSON","t":"Jane Doe"}]}' in msgs[0]["content"]
+    assert '"label"' not in msgs[0]["content"]
+
+
+def test_build_messages_rejects_compact_teacher_mode():
+    with pytest.raises(ValueError, match="student inference"):
+        build_messages("Hello world", teacher_mode=True, compact=True)
+
+
 # --- _extract_json ---
 
 def test_extract_json_plain():
@@ -185,6 +196,17 @@ def test_parse_response_empty_spans():
     record, valid = parse_response("r1", text, raw)
     assert valid is True
     assert len(record.spans) == 0
+
+
+def test_parse_response_compact_shape():
+    text = "Contact Alice at alice@example.com"
+    raw = '{"s":[{"l":"PERSON","t":"Alice"},{"l":"EMAIL","t":"alice@example.com"}]}'
+    record, valid = parse_response("r1", text, raw)
+    assert valid is True
+    assert [(s.label.value, s.text) for s in record.spans] == [
+        ("PERSON", "Alice"),
+        ("EMAIL", "alice@example.com"),
+    ]
 
 
 def test_parse_response_invalid_json():

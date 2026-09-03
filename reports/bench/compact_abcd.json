@@ -1,0 +1,401 @@
+{
+  "experiment": "compact",
+  "repeat_passes": 2,
+  "selection": "best records/s pass per arm; every pass retained below",
+  "server_cmd": "llama-server -m /Users/jatin1.gupta/Downloads/forge/models/pii-1.5b-gguf/model-Q8_0.gguf -ngl 99 -np 32 -c 32768 --mlock",
+  "llama_cpp_commit": "9cffdcc",
+  "arms": [
+    {
+      "name": "verbose_baseline",
+      "pass": 2,
+      "micro_f1": 0.6359832635983264,
+      "ci_lo": 0.5958311170212766,
+      "ci_hi": 0.6747316621416409,
+      "micro_precision": 0.6170500676589986,
+      "micro_recall": 0.6561151079136691,
+      "schema_valid": 384,
+      "n": 385,
+      "schema_rate": 0.9974025974025974,
+      "tokens_per_record": 51.38961038961039,
+      "wall_s": 203.70538270799443,
+      "s_per_record": 0.5291048901506349,
+      "records_per_s": 1.889984422021317,
+      "output_tok_s_aggregate": 97.12556309010844,
+      "usd_per_1k": 0.020508794103397024,
+      "contention_at_start": {
+        "loadavg_1m": 1.6,
+        "loadavg_5m": 2.94,
+        "loadavg_15m": 4.6,
+        "swapusage": "total = 13312.00M  used = 12571.81M  free = 740.19M  (encrypted)",
+        "ncpu": "8"
+      },
+      "contention_at_end": {
+        "loadavg_1m": 2.13,
+        "loadavg_5m": 2.98,
+        "loadavg_15m": 4.3,
+        "swapusage": "total = 14336.00M  used = 13374.25M  free = 961.75M  (encrypted)",
+        "ncpu": "8"
+      },
+      "passes": [
+        {
+          "name": "verbose_baseline",
+          "pass": 1,
+          "micro_f1": 0.6359832635983264,
+          "ci_lo": 0.5958311170212766,
+          "ci_hi": 0.6747316621416409,
+          "micro_precision": 0.6170500676589986,
+          "micro_recall": 0.6561151079136691,
+          "schema_valid": 384,
+          "n": 385,
+          "schema_rate": 0.9974025974025974,
+          "tokens_per_record": 51.394805194805194,
+          "wall_s": 268.2139992918819,
+          "s_per_record": 0.6966597384204725,
+          "records_per_s": 1.435420973612293,
+          "output_tok_s_aggregate": 73.7731813113414,
+          "usd_per_1k": 0.027003438073165863,
+          "contention_at_start": {
+            "loadavg_1m": 6.48,
+            "loadavg_5m": 7.29,
+            "loadavg_15m": 6.47,
+            "swapusage": "total = 9216.00M  used = 8359.75M  free = 856.25M  (encrypted)",
+            "ncpu": "8"
+          },
+          "contention_at_end": {
+            "loadavg_1m": 6.27,
+            "loadavg_5m": 6.84,
+            "loadavg_15m": 6.44,
+            "swapusage": "total = 9216.00M  used = 8231.75M  free = 984.25M  (encrypted)",
+            "ncpu": "8"
+          }
+        },
+        {
+          "name": "verbose_baseline",
+          "pass": 2,
+          "micro_f1": 0.6359832635983264,
+          "ci_lo": 0.5958311170212766,
+          "ci_hi": 0.6747316621416409,
+          "micro_precision": 0.6170500676589986,
+          "micro_recall": 0.6561151079136691,
+          "schema_valid": 384,
+          "n": 385,
+          "schema_rate": 0.9974025974025974,
+          "tokens_per_record": 51.38961038961039,
+          "wall_s": 203.70538270799443,
+          "s_per_record": 0.5291048901506349,
+          "records_per_s": 1.889984422021317,
+          "output_tok_s_aggregate": 97.12556309010844,
+          "usd_per_1k": 0.020508794103397024,
+          "contention_at_start": {
+            "loadavg_1m": 1.6,
+            "loadavg_5m": 2.94,
+            "loadavg_15m": 4.6,
+            "swapusage": "total = 13312.00M  used = 12571.81M  free = 740.19M  (encrypted)",
+            "ncpu": "8"
+          },
+          "contention_at_end": {
+            "loadavg_1m": 2.13,
+            "loadavg_5m": 2.98,
+            "loadavg_15m": 4.3,
+            "swapusage": "total = 14336.00M  used = 13374.25M  free = 961.75M  (encrypted)",
+            "ncpu": "8"
+          }
+        }
+      ]
+    },
+    {
+      "name": "compact_grammar",
+      "pass": 2,
+      "micro_f1": 0.0028694404591104736,
+      "ci_lo": 0.0,
+      "ci_hi": 0.008836524300441826,
+      "micro_precision": 0.5,
+      "micro_recall": 0.0014388489208633094,
+      "schema_valid": 385,
+      "n": 385,
+      "schema_rate": 1.0,
+      "tokens_per_record": 5.109090909090909,
+      "wall_s": 64.43958100001328,
+      "s_per_record": 0.16737553506496955,
+      "records_per_s": 5.9745888167696295,
+      "output_tok_s_aggregate": 30.524717409313922,
+      "usd_per_1k": 0.0064876935565953585,
+      "contention_at_start": {
+        "loadavg_1m": 1.7,
+        "loadavg_5m": 3.26,
+        "loadavg_15m": 4.84,
+        "swapusage": "total = 13312.00M  used = 12580.94M  free = 731.06M  (encrypted)",
+        "ncpu": "8"
+      },
+      "contention_at_end": {
+        "loadavg_1m": 1.6,
+        "loadavg_5m": 2.94,
+        "loadavg_15m": 4.6,
+        "swapusage": "total = 13312.00M  used = 12571.81M  free = 740.19M  (encrypted)",
+        "ncpu": "8"
+      },
+      "passes": [
+        {
+          "name": "compact_grammar",
+          "pass": 1,
+          "micro_f1": 0.0028694404591104736,
+          "ci_lo": 0.0,
+          "ci_hi": 0.008836524300441826,
+          "micro_precision": 0.5,
+          "micro_recall": 0.0014388489208633094,
+          "schema_valid": 385,
+          "n": 385,
+          "schema_rate": 1.0,
+          "tokens_per_record": 5.109090909090909,
+          "wall_s": 96.58973604207858,
+          "s_per_record": 0.2508824312781262,
+          "records_per_s": 3.985930760099372,
+          "output_tok_s_aggregate": 20.364482610689517,
+          "usd_per_1k": 0.009724529527175394,
+          "contention_at_start": {
+            "loadavg_1m": 6.27,
+            "loadavg_5m": 6.84,
+            "loadavg_15m": 6.44,
+            "swapusage": "total = 9216.00M  used = 8231.75M  free = 984.25M  (encrypted)",
+            "ncpu": "8"
+          },
+          "contention_at_end": {
+            "loadavg_1m": 8.22,
+            "loadavg_5m": 7.19,
+            "loadavg_15m": 6.61,
+            "swapusage": "total = 10240.00M  used = 9675.38M  free = 564.62M  (encrypted)",
+            "ncpu": "8"
+          }
+        },
+        {
+          "name": "compact_grammar",
+          "pass": 2,
+          "micro_f1": 0.0028694404591104736,
+          "ci_lo": 0.0,
+          "ci_hi": 0.008836524300441826,
+          "micro_precision": 0.5,
+          "micro_recall": 0.0014388489208633094,
+          "schema_valid": 385,
+          "n": 385,
+          "schema_rate": 1.0,
+          "tokens_per_record": 5.109090909090909,
+          "wall_s": 64.43958100001328,
+          "s_per_record": 0.16737553506496955,
+          "records_per_s": 5.9745888167696295,
+          "output_tok_s_aggregate": 30.524717409313922,
+          "usd_per_1k": 0.0064876935565953585,
+          "contention_at_start": {
+            "loadavg_1m": 1.7,
+            "loadavg_5m": 3.26,
+            "loadavg_15m": 4.84,
+            "swapusage": "total = 13312.00M  used = 12580.94M  free = 731.06M  (encrypted)",
+            "ncpu": "8"
+          },
+          "contention_at_end": {
+            "loadavg_1m": 1.6,
+            "loadavg_5m": 2.94,
+            "loadavg_15m": 4.6,
+            "swapusage": "total = 13312.00M  used = 12571.81M  free = 740.19M  (encrypted)",
+            "ncpu": "8"
+          }
+        }
+      ]
+    },
+    {
+      "name": "compact_prompt",
+      "pass": 2,
+      "micro_f1": 0.6687402799377916,
+      "ci_lo": 0.6295993458708095,
+      "ci_hi": 0.7061574434918161,
+      "micro_precision": 0.727580372250423,
+      "micro_recall": 0.6187050359712231,
+      "schema_valid": 381,
+      "n": 385,
+      "schema_rate": 0.9896103896103896,
+      "tokens_per_record": 33.13246753246753,
+      "wall_s": 141.56304837507196,
+      "s_per_record": 0.36769622954564146,
+      "records_per_s": 2.7196362639771694,
+      "output_tok_s_aggregate": 90.10826021634486,
+      "usd_per_1k": 0.014252384365980936,
+      "contention_at_start": {
+        "loadavg_1m": 2.09,
+        "loadavg_5m": 4.26,
+        "loadavg_15m": 5.42,
+        "swapusage": "total = 13312.00M  used = 12578.12M  free = 733.88M  (encrypted)",
+        "ncpu": "8"
+      },
+      "contention_at_end": {
+        "loadavg_1m": 1.7,
+        "loadavg_5m": 3.26,
+        "loadavg_15m": 4.84,
+        "swapusage": "total = 13312.00M  used = 12577.69M  free = 734.31M  (encrypted)",
+        "ncpu": "8"
+      },
+      "passes": [
+        {
+          "name": "compact_prompt",
+          "pass": 1,
+          "micro_f1": 0.6687402799377916,
+          "ci_lo": 0.6293706293706294,
+          "ci_hi": 0.7064221960076464,
+          "micro_precision": 0.727580372250423,
+          "micro_recall": 0.6187050359712231,
+          "schema_valid": 382,
+          "n": 385,
+          "schema_rate": 0.9922077922077922,
+          "tokens_per_record": 33.10909090909091,
+          "wall_s": 193.11805208399892,
+          "s_per_record": 0.5016053300883089,
+          "records_per_s": 1.993599230343002,
+          "output_tok_s_aggregate": 66.00625815372011,
+          "usd_per_1k": 0.019442875368282556,
+          "contention_at_start": {
+            "loadavg_1m": 8.22,
+            "loadavg_5m": 7.19,
+            "loadavg_15m": 6.61,
+            "swapusage": "total = 10240.00M  used = 9677.69M  free = 562.31M  (encrypted)",
+            "ncpu": "8"
+          },
+          "contention_at_end": {
+            "loadavg_1m": 4.01,
+            "loadavg_5m": 5.77,
+            "loadavg_15m": 6.15,
+            "swapusage": "total = 12288.00M  used = 11212.19M  free = 1075.81M  (encrypted)",
+            "ncpu": "8"
+          }
+        },
+        {
+          "name": "compact_prompt",
+          "pass": 2,
+          "micro_f1": 0.6687402799377916,
+          "ci_lo": 0.6295993458708095,
+          "ci_hi": 0.7061574434918161,
+          "micro_precision": 0.727580372250423,
+          "micro_recall": 0.6187050359712231,
+          "schema_valid": 381,
+          "n": 385,
+          "schema_rate": 0.9896103896103896,
+          "tokens_per_record": 33.13246753246753,
+          "wall_s": 141.56304837507196,
+          "s_per_record": 0.36769622954564146,
+          "records_per_s": 2.7196362639771694,
+          "output_tok_s_aggregate": 90.10826021634486,
+          "usd_per_1k": 0.014252384365980936,
+          "contention_at_start": {
+            "loadavg_1m": 2.09,
+            "loadavg_5m": 4.26,
+            "loadavg_15m": 5.42,
+            "swapusage": "total = 13312.00M  used = 12578.12M  free = 733.88M  (encrypted)",
+            "ncpu": "8"
+          },
+          "contention_at_end": {
+            "loadavg_1m": 1.7,
+            "loadavg_5m": 3.26,
+            "loadavg_15m": 4.84,
+            "swapusage": "total = 13312.00M  used = 12577.69M  free = 734.31M  (encrypted)",
+            "ncpu": "8"
+          }
+        }
+      ]
+    },
+    {
+      "name": "compact_prompt_grammar",
+      "pass": 2,
+      "micro_f1": 0.6777862016679302,
+      "ci_lo": 0.6387347862238504,
+      "ci_hi": 0.7149617039076146,
+      "micro_precision": 0.7163461538461539,
+      "micro_recall": 0.6431654676258993,
+      "schema_valid": 385,
+      "n": 385,
+      "schema_rate": 1.0,
+      "tokens_per_record": 32.8051948051948,
+      "wall_s": 153.4944992500823,
+      "s_per_record": 0.3986870110391748,
+      "records_per_s": 2.508233206277544,
+      "output_tok_s_aggregate": 82.2830789487932,
+      "usd_per_1k": 0.015453627387139356,
+      "contention_at_start": {
+        "loadavg_1m": 3.96,
+        "loadavg_5m": 5.46,
+        "loadavg_15m": 6.0,
+        "swapusage": "total = 13312.00M  used = 12163.44M  free = 1148.56M  (encrypted)",
+        "ncpu": "8"
+      },
+      "contention_at_end": {
+        "loadavg_1m": 2.09,
+        "loadavg_5m": 4.26,
+        "loadavg_15m": 5.42,
+        "swapusage": "total = 13312.00M  used = 12578.12M  free = 733.88M  (encrypted)",
+        "ncpu": "8"
+      },
+      "passes": [
+        {
+          "name": "compact_prompt_grammar",
+          "pass": 1,
+          "micro_f1": 0.6772727272727272,
+          "ci_lo": 0.6383954515669508,
+          "ci_hi": 0.7142857142857143,
+          "micro_precision": 0.7152,
+          "micro_recall": 0.6431654676258993,
+          "schema_valid": 385,
+          "n": 385,
+          "schema_rate": 1.0,
+          "tokens_per_record": 32.8051948051948,
+          "wall_s": 168.194607750047,
+          "s_per_record": 0.4368691110390831,
+          "records_per_s": 2.2890151185592478,
+          "output_tok_s_aggregate": 75.0915868763722,
+          "usd_per_1k": 0.01693361527217005,
+          "contention_at_start": {
+            "loadavg_1m": 4.01,
+            "loadavg_5m": 5.77,
+            "loadavg_15m": 6.15,
+            "swapusage": "total = 12288.00M  used = 11212.19M  free = 1075.81M  (encrypted)",
+            "ncpu": "8"
+          },
+          "contention_at_end": {
+            "loadavg_1m": 3.96,
+            "loadavg_5m": 5.46,
+            "loadavg_15m": 6.0,
+            "swapusage": "total = 13312.00M  used = 12163.44M  free = 1148.56M  (encrypted)",
+            "ncpu": "8"
+          }
+        },
+        {
+          "name": "compact_prompt_grammar",
+          "pass": 2,
+          "micro_f1": 0.6777862016679302,
+          "ci_lo": 0.6387347862238504,
+          "ci_hi": 0.7149617039076146,
+          "micro_precision": 0.7163461538461539,
+          "micro_recall": 0.6431654676258993,
+          "schema_valid": 385,
+          "n": 385,
+          "schema_rate": 1.0,
+          "tokens_per_record": 32.8051948051948,
+          "wall_s": 153.4944992500823,
+          "s_per_record": 0.3986870110391748,
+          "records_per_s": 2.508233206277544,
+          "output_tok_s_aggregate": 82.2830789487932,
+          "usd_per_1k": 0.015453627387139356,
+          "contention_at_start": {
+            "loadavg_1m": 3.96,
+            "loadavg_5m": 5.46,
+            "loadavg_15m": 6.0,
+            "swapusage": "total = 13312.00M  used = 12163.44M  free = 1148.56M  (encrypted)",
+            "ncpu": "8"
+          },
+          "contention_at_end": {
+            "loadavg_1m": 2.09,
+            "loadavg_5m": 4.26,
+            "loadavg_15m": 5.42,
+            "swapusage": "total = 13312.00M  used = 12578.12M  free = 733.88M  (encrypted)",
+            "ncpu": "8"
+          }
+        }
+      ]
+    }
+  ]
+}

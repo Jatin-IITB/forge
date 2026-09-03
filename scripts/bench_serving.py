@@ -55,6 +55,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from forge.grammar import compact_spans_gbnf
 from forge.inference import build_messages, parse_response
 from forge.schema import PIIRecord
 
@@ -165,15 +166,17 @@ def run_openai(args, gold: list[PIIRecord]) -> Run:
                     timeout=args.timeout)
 
     def one(rec: PIIRecord) -> Sample:
-        messages = build_messages(rec.text)
+        messages = build_messages(rec.text, compact=args.compact_prompt)
         t0 = time.perf_counter()
         try:
+            extra_body = {"grammar": compact_spans_gbnf()} if args.compact_grammar else None
             resp = client.chat.completions.create(
                 model=args.model,
                 messages=messages,
                 max_tokens=args.max_tokens,
                 temperature=args.temperature,
                 seed=args.seed,
+                extra_body=extra_body,
             )
             lat = time.perf_counter() - t0
             usage = getattr(resp, "usage", None)
@@ -227,7 +230,7 @@ def run_transformers(args, gold: list[PIIRecord]) -> Run:
     model.eval()
 
     def one(rec: PIIRecord) -> Sample:
-        messages = build_messages(rec.text)
+        messages = build_messages(rec.text, compact=args.compact_prompt)
         t0 = time.perf_counter()
         enc = tok.apply_chat_template(messages, add_generation_prompt=True,
                                       return_tensors="pt")
@@ -285,6 +288,8 @@ def summarize(args, run: Run, gold: list[PIIRecord]) -> dict:
         "concurrency": args.concurrency,
         "max_tokens": args.max_tokens,
         "temperature": args.temperature,
+        "compact_prompt": args.compact_prompt,
+        "compact_grammar": args.compact_grammar,
         "gold": str(args.gold),
         "n_records": n,
         "n_ok": len(ok),
@@ -423,6 +428,16 @@ def main() -> int:
     ap.add_argument("--max-tokens", type=int, default=1024)
     ap.add_argument("--temperature", type=float, default=0.0)
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument(
+        "--compact-prompt",
+        action="store_true",
+        help="Request the compact s/l/t response shape",
+    )
+    ap.add_argument(
+        "--compact-grammar",
+        action="store_true",
+        help="Force the compact s/l/t response shape (OpenAI backend only)",
+    )
     ap.add_argument("--timeout", type=float, default=300.0)
     ap.add_argument("--warmup", type=int, default=2, help="Warmup requests, excluded from timing")
     ap.add_argument("--repeat", type=int, default=1, help="Repeat the run N times; report the best-throughput pass")
@@ -436,6 +451,9 @@ def main() -> int:
     ap.add_argument("--save-predictions", type=Path, default=None,
                     help="Also write predictions JSONL (for scoring with run_eval.py)")
     args = ap.parse_args()
+
+    if args.compact_grammar and args.backend != "openai":
+        ap.error("--compact-grammar requires the openai backend")
 
     args.contention_at_start = _contention()
 

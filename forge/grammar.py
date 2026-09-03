@@ -81,6 +81,30 @@ hex    ::= [0-9a-fA-F]
     ) + common + 'ws     ::= [ \\t\\n]*\n'
 
 
+def compact_spans_gbnf() -> str:
+    """GBNF for the minified ``{"s":[{"l":<enum>,"t":<string>}...]}`` format.
+
+    This is intentionally a separate grammar rather than an option on
+    :func:`spans_gbnf`: the verbose grammar is the trained contract, while this
+    compact shape is an explicitly off-distribution serving experiment. Keeping
+    the names distinct makes it difficult to enable the experiment by accident.
+
+    The text value remains mandatory. Offsets are still reconstructed by
+    locating that exact substring in the source; asking the model to count
+    character offsets would trade output tokens for unreliable boundaries.
+    """
+    labels = " | ".join(f'"\\"{t.value}\\""' for t in PIIType)
+    return f"""\
+root   ::= "{{\\"s\\":" spans "}}"
+spans  ::= "[]" | "[" span ("," span)* "]"
+span   ::= "{{\\"l\\":" label ",\\"t\\":" string "}}"
+label  ::= {labels}
+string ::= "\\"" char* "\\""
+char   ::= [^"\\\\\\x7F\\x00-\\x1F] | "\\\\" (["\\\\bfnrt/] | "u" hex hex hex hex)
+hex    ::= [0-9a-fA-F]
+"""
+
+
 def spans_json_schema() -> dict:
     """The same constraint as a JSON Schema, for servers that take one.
 
