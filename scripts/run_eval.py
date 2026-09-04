@@ -159,6 +159,14 @@ def main() -> int:
         ),
     )
     ap.add_argument(
+        "--retrieval", type=Path, default=None, metavar="TRAIN_JSONL",
+        help=(
+            "Add retrieval-proposed spans from a carrier index built over TRAIN_JSONL "
+            "(ADR 0020). Fills gaps only — the model wins every conflict. Adds no "
+            "prompt tokens; retrieval runs beside the model, not in its context"
+        ),
+    )
+    ap.add_argument(
         "--ci", action="store_true",
         help=(
             "Report 95%% bootstrap confidence intervals (contract v2 requires them). "
@@ -200,6 +208,24 @@ def main() -> int:
     print(f"loaded {len(gold)} gold records, {len(preds)} predictions")
 
     report = evaluate(gold, preds, schema_valid_count=schema_valid_count)
+
+    # ADR 0020 ships retrieval as a recall aid despite missing its own F1 gate,
+    # so every layer is reported separately. A single "system" number would let
+    # a rules-and-retrieval result read as a distillation result, which is the
+    # conflation ADR 0012's three-number rule exists to prevent.
+    retrieval_report = None
+    if args.retrieval:
+        from forge.retrieval import SpanRetriever
+        from forge.retrieval import merge_with_model as merge_retrieved
+
+        index = SpanRetriever(load_records(args.retrieval))
+        print(f"retrieval index: {len(index)} carriers from {args.retrieval}")
+        retrieved = [
+            r.model_copy(update={"spans": merge_retrieved(r.spans, index.propose(r.text))})
+            for r in preds
+        ]
+        retrieval_report = evaluate(gold, retrieved, schema_valid_count=schema_valid_count)
+        preds = retrieved
 
     # ADR 0012 requires all three numbers to be published together. Reporting the
     # system score alone would let a rules-driven result read as a distillation
@@ -248,6 +274,24 @@ def main() -> int:
     else:
         print()
         print(report.format_table())
+        if retrieval_report is not None:
+            print()
+            print("=" * 62)
+            print("  MODEL-ONLY vs + RETRIEVAL  (ADR 0020)")
+            print("  Shipped as a recall aid; it MISSED its own +0.03 F1 gate.")
+            print("  Both numbers are published so the miss stays visible.")
+            print("=" * 62)
+            print(f"  {'':<20}{'model-only':>13}{'+retrieval':>13}{'delta':>10}")
+            print(f"  {'-' * 54}")
+            for name, a, b in (
+                ("micro-F1", report.micro_f1, retrieval_report.micro_f1),
+                ("micro-precision", report.micro_precision, retrieval_report.micro_precision),
+                ("micro-recall", report.micro_recall, retrieval_report.micro_recall),
+            ):
+                sign = "+" if b - a >= 0 else ""
+                print(f"  {name:<20}{a:>13.4f}{b:>13.4f}{sign}{b - a:>9.4f}")
+            print()
+            print("  Retrieval adds no prompt tokens, so serving cost is unchanged.")
         if system_report is not None:
             print()
             print("=" * 62)
