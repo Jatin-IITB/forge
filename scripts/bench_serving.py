@@ -22,6 +22,8 @@ artifact and every derived number.
 Backends
     openai        an OpenAI-compatible endpoint (llama-server, vLLM, Ollama)
     transformers  local HF model on MPS/CUDA/CPU, batch 1 — the incumbent baseline
+    token-classifier
+                  local one-pass BIOES head on MPS/CUDA/CPU, batched
 
 Usage
     # baseline: the incumbent transformers-MPS fp16 path
@@ -81,11 +83,11 @@ def _check_cost_model_parity() -> str | None:
     """Return a warning if run_economics.py's pricing has drifted from ours."""
     try:
         from scripts.run_economics import DEFAULT_PRICING  # type: ignore
-    except Exception:
+    except Exception:  # noqa: BLE001
         try:
             sys.path.insert(0, str(Path(__file__).resolve().parent))
             from run_economics import DEFAULT_PRICING  # type: ignore
-        except Exception:
+        except Exception:  # noqa: BLE001
             return "could not import run_economics.DEFAULT_PRICING to cross-check"
     drift = {k: (v, DEFAULT_PRICING.get(k)) for k, v in COST_MODEL.items()
              if DEFAULT_PRICING.get(k) != v}
@@ -144,6 +146,9 @@ class Sample:
 class Run:
     samples: list[Sample] = field(default_factory=list)
     wall_clock_s: float = 0.0
+    padded_input_tokens: int = 0
+    source_tokens: int = 0
+    runtime: dict = field(default_factory=dict)
 
 
 def pct(vals: list[float], q: float) -> float:
@@ -314,6 +319,187 @@ def run_transformers(args, gold: list[PIIRecord]) -> Run:
     return Run(samples=samples, wall_clock_s=wall)
 
 
+# --- backend: local one-pass BIOES token classifier ------------------------
+
+
+def run_token_classifier(args, gold: list[PIIRecord]) -> Run:
+    import numpy as np
+    import torch
+    from transformers import AutoConfig, AutoTokenizer
+
+    from forge.token_classifier import constrained_viterbi_batch, decode_bioes
+    from forge.token_model import ForgeQwen2ForTokenClassification
+
+    tok = AutoTokenizer.from_pretrained(args.model, use_fast=True)
+    if tok.pad_token is None:
+        tok.pad_token = tok.eos_token
+
+    if args.device == "auto":
+        device = (
+            "mps"
+            if torch.backends.mps.is_available()
+            else "cuda"
+            if torch.cuda.is_available()
+            else "cpu"
+        )
+    else:
+        device = args.device
+    if device == "mps" and not torch.backends.mps.is_available():
+        raise RuntimeError("--device mps requested but MPS is unavailable")
+    if device == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("--device cuda requested but CUDA is unavailable")
+    dtype = torch.float16 if device == "mps" else torch.bfloat16 if device == "cuda" else torch.float32
+
+    config = AutoConfig.from_pretrained(args.model)
+    config._attn_implementation = "eager"
+    print(f"loading {args.model} (device={device}, dtype={dtype})", file=sys.stderr)
+    model = ForgeQwen2ForTokenClassification.from_pretrained(
+        args.model,
+        config=config,
+        dtype=dtype,
+    ).to(device)
+    model.eval()
+
+    def rendered_input(record: PIIRecord) -> tuple[str, int]:
+        if args.token_input == "raw":
+            return record.text, 0
+        rendered = tok.apply_chat_template(
+            build_messages(record.text),
+            tokenize=False,
+            add_generation_prompt=False,
+        )
+        source_start = rendered.rfind(record.text)
+        if source_start < 0:
+            raise ValueError(f"{record.id}: source text not found in rendered system prompt")
+        return rendered, source_start
+
+    def run_once(records: list[PIIRecord]) -> Run:
+        samples: list[Sample] = []
+        padded_input_tokens = 0
+        source_tokens = 0
+        started = time.perf_counter()
+        ordered_records = (
+            sorted(records, key=lambda record: len(record.text))
+            if args.length_bucket
+            else records
+        )
+        for batch_start in range(0, len(ordered_records), args.batch_size):
+            batch_started = time.perf_counter()
+            batch = ordered_records[batch_start : batch_start + args.batch_size]
+            rendered = [rendered_input(record) for record in batch]
+            encoded = tok(
+                [item[0] for item in rendered],
+                add_special_tokens=False,
+                padding=True,
+                truncation=True,
+                max_length=args.max_length,
+                return_offsets_mapping=True,
+                return_tensors="pt",
+            )
+            offsets = encoded.pop("offset_mapping")
+            attention_mask = encoded["attention_mask"]
+            padded_input_tokens += int(encoded["input_ids"].numel())
+            model_inputs = {key: value.to(device) for key, value in encoded.items()}
+
+            with torch.inference_mode():
+                logits = model(**model_inputs).logits
+            if device == "mps":
+                torch.mps.synchronize()
+
+            logits_cpu = logits.float().cpu().numpy()
+            source_logits: list[np.ndarray] = []
+            local_offsets_by_record: list[list[tuple[int, int]]] = []
+            input_lengths: list[int] = []
+            for index, record in enumerate(batch):
+                input_length = int(attention_mask[index].sum())
+                input_lengths.append(input_length)
+                source_start = rendered[index][1]
+                source_end = source_start + len(record.text)
+                token_indices = [
+                    token_index
+                    for token_index, (start, end) in enumerate(
+                        offsets[index, :input_length].tolist()
+                    )
+                    if end > start and end > source_start and start < source_end
+                ]
+                if not token_indices:
+                    raise ValueError(f"{record.id}: no source tokens found in classifier input")
+                source_tokens += len(token_indices)
+                source_logits.append(logits_cpu[index, token_indices])
+                local_offsets = [
+                    (
+                        max(0, int(offsets[index, token_index, 0]) - source_start),
+                        min(
+                            len(record.text),
+                            int(offsets[index, token_index, 1]) - source_start,
+                        ),
+                    )
+                    for token_index in token_indices
+                ]
+                if max(end for _, end in local_offsets) < len(record.text):
+                    raise ValueError(
+                        f"{record.id}: max length truncated the classifier source text"
+                    )
+                local_offsets_by_record.append(local_offsets)
+
+            source_lengths = [len(row) for row in source_logits]
+            padded_source_logits = np.zeros(
+                (len(batch), max(source_lengths), logits_cpu.shape[2]),
+                dtype=np.float32,
+            )
+            for index, row in enumerate(source_logits):
+                padded_source_logits[index, : len(row)] = row
+            paths = constrained_viterbi_batch(padded_source_logits, source_lengths)
+
+            decoded_batch: list[tuple[PIIRecord, int]] = []
+            for record, local_offsets, path, input_length in zip(
+                batch,
+                local_offsets_by_record,
+                paths,
+                input_lengths,
+            ):
+                decoded_batch.append(
+                    (
+                        decode_bioes(
+                            record.id,
+                            record.text,
+                            local_offsets,
+                            path,
+                            split=record.split,
+                        ),
+                        input_length,
+                    )
+                )
+            batch_elapsed = time.perf_counter() - batch_started
+            samples.extend(
+                Sample(
+                    rec_id=record.id,
+                    latency_s=batch_elapsed,
+                    prompt_tokens=input_length,
+                    schema_valid=True,
+                    pred=prediction,
+                )
+                for record, (prediction, input_length) in zip(batch, decoded_batch)
+            )
+        return Run(
+            samples=samples,
+            wall_clock_s=time.perf_counter() - started,
+            padded_input_tokens=padded_input_tokens,
+            source_tokens=source_tokens,
+            runtime={
+                "device": device,
+                "dtype": str(dtype),
+                "batch_size": args.batch_size,
+                "token_input": args.token_input,
+                "length_bucket": args.length_bucket,
+            },
+        )
+
+    for _ in range(args.warmup):
+        run_once(gold[: args.batch_size])
+    return run_once(gold)
+
+
 # ---------------------------------------------------------------------------
 # Reporting
 # ---------------------------------------------------------------------------
@@ -337,6 +523,9 @@ def summarize(args, run: Run, gold: list[PIIRecord]) -> dict:
         "model": args.model,
         "quant": args.quant,
         "concurrency": args.concurrency,
+        "batch_size": args.batch_size if args.backend == "token-classifier" else None,
+        "token_input": args.token_input if args.backend == "token-classifier" else None,
+        "length_bucket": args.length_bucket if args.backend == "token-classifier" else False,
         "max_tokens": args.max_tokens,
         "temperature": args.temperature,
         "compact_prompt": args.compact_prompt,
@@ -374,6 +563,17 @@ def summarize(args, run: Run, gold: list[PIIRecord]) -> dict:
             "completion_total": comp,
             "prompt_per_record": round(prompt / len(ok), 2) if ok else 0,
             "completion_per_record": round(comp / len(ok), 2) if ok else 0,
+            "source_total": run.source_tokens,
+            "source_per_record": round(run.source_tokens / len(ok), 2) if ok else 0,
+            "padded_input_total": run.padded_input_tokens,
+            "padded_input_per_record": (
+                round(run.padded_input_tokens / len(ok), 2) if ok else 0
+            ),
+            "padded_input_tok_s_aggregate": (
+                round(run.padded_input_tokens / run.wall_clock_s, 2)
+                if run.wall_clock_s
+                else 0
+            ),
             "output_tok_s_aggregate": round(comp / run.wall_clock_s, 2) if run.wall_clock_s else 0,
             "total_tok_s_aggregate": round((comp + prompt) / run.wall_clock_s, 2) if run.wall_clock_s else 0,
         },
@@ -409,6 +609,7 @@ def summarize(args, run: Run, gold: list[PIIRecord]) -> dict:
             "server_cmd": args.server_cmd,
             "llama_cpp_commit": args.llama_cpp_commit,
         },
+        "runtime": run.runtime,
         "contention_at_start": args.contention_at_start,
         "contention_at_end": _contention(),
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
@@ -423,7 +624,7 @@ def _sysctl(key: str) -> str | None:
     try:
         return subprocess.run(["sysctl", "-n", key], capture_output=True,
                               text=True, check=True).stdout.strip()
-    except Exception:
+    except Exception:  # noqa: BLE001
         return None
 
 
@@ -440,8 +641,8 @@ def _contention() -> dict:
     try:
         load = os.getloadavg()
         out["loadavg_1m"], out["loadavg_5m"], out["loadavg_15m"] = [round(x, 2) for x in load]
-    except Exception:  # noqa: BLE001
-        pass
+    except OSError:
+        return out
     swap = _sysctl("vm.swapusage") or ""
     if swap:
         out["swapusage"] = swap
@@ -452,9 +653,14 @@ def _contention() -> dict:
 def print_summary(d: dict) -> None:
     L = d["latency"]
     T = d["tokens"]
+    parallelism = (
+        f"batch={d['batch_size']}"
+        if d["backend"] == "token-classifier"
+        else f"concurrency={d['concurrency']}"
+    )
     print()
     print("=" * 68)
-    print(f"  {d['config_name']}   ({d['backend']}, concurrency={d['concurrency']})")
+    print(f"  {d['config_name']}   ({d['backend']}, {parallelism})")
     print("=" * 68)
     print(f"  records                 {d['n_ok']}/{d['n_records']}  "
           f"(errors {d['errors']}, schema-valid {d['schema_valid']})")
@@ -472,6 +678,11 @@ def print_summary(d: dict) -> None:
     print()
     print(f"  tokens/record           {T['prompt_per_record']:.0f} in, "
           f"{T['completion_per_record']:.1f} out")
+    if T["padded_input_total"]:
+        print(
+            f"  padded/source tokens    {T['padded_input_per_record']:.1f} / "
+            f"{T['source_per_record']:.1f} per record"
+        )
     if "cost_model_warning" in d:
         print(f"\n  [WARN] {d['cost_model_warning']}")
     print()
@@ -480,7 +691,11 @@ def print_summary(d: dict) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser(
         description="Measure serving latency and sustained throughput (gates G3/G4).")
-    ap.add_argument("--backend", choices=["openai", "transformers"], default="openai")
+    ap.add_argument(
+        "--backend",
+        choices=["openai", "transformers", "token-classifier"],
+        default="openai",
+    )
     ap.add_argument("--model", required=True, help="Model id (server) or local path (transformers)")
     ap.add_argument("--adapter", default=None, help="LoRA adapter (transformers backend only)")
     ap.add_argument("--base-url", default="http://localhost:8080/v1")
@@ -488,6 +703,29 @@ def main() -> int:
     ap.add_argument("--gold", type=Path, default=Path("data/gold/test.jsonl"))
     ap.add_argument("--limit", type=int, default=None, help="Use only first N records")
     ap.add_argument("--concurrency", type=int, default=1)
+    ap.add_argument(
+        "--batch-size",
+        type=int,
+        default=32,
+        help="Batch size for the token-classifier backend",
+    )
+    ap.add_argument(
+        "--device",
+        choices=["auto", "mps", "cuda", "cpu"],
+        default="auto",
+        help="Device for the token-classifier backend",
+    )
+    ap.add_argument(
+        "--token-input",
+        choices=["raw", "system"],
+        default="raw",
+        help="Feed raw source text or the legacy instruction prompt to the token classifier",
+    )
+    ap.add_argument(
+        "--length-bucket",
+        action="store_true",
+        help="Batch token-classifier records by source character length to reduce padding",
+    )
     ap.add_argument("--max-tokens", type=int, default=1024)
     ap.add_argument("--temperature", type=float, default=0.0)
     ap.add_argument("--seed", type=int, default=42)
@@ -525,7 +763,18 @@ def main() -> int:
     )
     ap.add_argument("--timeout", type=float, default=300.0)
     ap.add_argument("--warmup", type=int, default=2, help="Warmup requests, excluded from timing")
-    ap.add_argument("--repeat", type=int, default=1, help="Repeat the run N times; report the best-throughput pass")
+    ap.add_argument(
+        "--repeat",
+        type=int,
+        default=1,
+        help="Repeat the run N times; selection is controlled separately",
+    )
+    ap.add_argument(
+        "--repeat-selection",
+        choices=["first", "median", "best"],
+        default="best",
+        help="Which measured pass is the headline result; use median to avoid best-of-N",
+    )
     ap.add_argument("--config-name", required=True, help="Name stamped into the artifact")
     ap.add_argument("--quant", default=None, help="Quantization label for the record")
     ap.add_argument("--watts", type=float, default=None,
@@ -554,8 +803,14 @@ def main() -> int:
         ap.error("--line-grammar requires --line-prompt")
     if args.compact_prompt and args.line_prompt:
         ap.error("--compact-prompt and --line-prompt are mutually exclusive")
-
-    args.contention_at_start = _contention()
+    if args.backend != "token-classifier" and (
+        args.device != "auto" or args.token_input != "raw" or args.length_bucket
+    ):
+        ap.error("--device, --token-input, and --length-bucket are token-classifier options")
+    if args.backend == "token-classifier" and args.concurrency != 1:
+        ap.error("token-classifier uses --batch-size; leave --concurrency at 1")
+    if args.repeat_selection == "median" and args.repeat % 2 == 0:
+        ap.error("--repeat-selection median requires an odd --repeat")
 
     gold = load_gold(args.gold, args.limit)
     if not gold:
@@ -564,29 +819,53 @@ def main() -> int:
     print(f"{args.config_name}: {len(gold)} records, backend={args.backend}, "
           f"concurrency={args.concurrency}", file=sys.stderr)
 
-    runner = run_openai if args.backend == "openai" else run_transformers
-    best: dict | None = None
-    best_run: Run | None = None
+    runner = {
+        "openai": run_openai,
+        "transformers": run_transformers,
+        "token-classifier": run_token_classifier,
+    }[args.backend]
+    measured: list[tuple[dict, Run]] = []
     for i in range(args.repeat):
+        args.contention_at_start = _contention()
         run = runner(args, gold)
         d = summarize(args, run, gold)
-        if best is None or d["records_per_s"] > best["records_per_s"]:
-            best, best_run = d, run
+        measured.append((d, run))
         if args.repeat > 1:
             print(f"  pass {i+1}/{args.repeat}: {d['records_per_s']:.3f} rec/s", file=sys.stderr)
-    assert best is not None and best_run is not None
-    best["repeat_passes"] = args.repeat
+    if args.repeat_selection == "first":
+        selected, selected_run = measured[0]
+    elif args.repeat_selection == "median":
+        selected, selected_run = sorted(
+            measured, key=lambda item: item[0]["records_per_s"]
+        )[len(measured) // 2]
+    else:
+        selected, selected_run = max(
+            measured, key=lambda item: item[0]["records_per_s"]
+        )
+    selected["repeat_passes"] = args.repeat
+    selected["repeat_selection"] = args.repeat_selection
+    selected["repeat_summaries"] = [
+        {
+            "pass": index,
+            "wall_clock_s": result["wall_clock_s"],
+            "sustained_s_per_record": result["sustained_s_per_record"],
+            "records_per_s": result["records_per_s"],
+            "contention_at_start": result["contention_at_start"],
+            "contention_at_end": result["contention_at_end"],
+        }
+        for index, (result, _) in enumerate(measured, 1)
+    ]
 
-    print_summary(best)
+    print_summary(selected)
 
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(json.dumps(best, indent=2) + "\n", encoding="utf-8")
+        args.out.write_text(json.dumps(selected, indent=2) + "\n", encoding="utf-8")
         print(f"wrote {args.out}", file=sys.stderr)
 
     if args.save_predictions:
         args.save_predictions.parent.mkdir(parents=True, exist_ok=True)
-        by_id = {s.rec_id: s for s in best_run.samples}
+        by_id = {s.rec_id: s for s in selected_run.samples}
         with args.save_predictions.open("w", encoding="utf-8") as fh:
             for rec in gold:
                 s = by_id.get(rec.id)
@@ -594,7 +873,7 @@ def main() -> int:
                     id=rec.id, text=rec.text, spans=[], split=rec.split)
                 fh.write(pred.model_dump_json() + "\n")
         meta = args.save_predictions.with_suffix(".meta.json")
-        meta.write_text(json.dumps(best, indent=2) + "\n", encoding="utf-8")
+        meta.write_text(json.dumps(selected, indent=2) + "\n", encoding="utf-8")
         print(f"wrote {args.save_predictions} (+ .meta.json)", file=sys.stderr)
 
     return 0

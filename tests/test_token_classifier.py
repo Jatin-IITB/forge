@@ -1,5 +1,6 @@
 """BIOES alignment and constrained decoding tests."""
 
+import pytest
 import torch
 from transformers import Qwen2Config
 
@@ -7,7 +8,9 @@ from forge.schema import PIIRecord, PIISpan, PIIType
 from forge.token_classifier import (
     ID2LABEL,
     LABEL2ID,
+    assert_bioes_round_trip,
     constrained_viterbi,
+    constrained_viterbi_batch,
     decode_bioes,
     encode_bioes,
 )
@@ -45,6 +48,52 @@ def test_url_terminal_period_is_removed():
     assert decoded.spans[0].text == "https://example.com/"
 
 
+def test_cross_token_boundary_clips_round_trip_exactly():
+    api_text = "Authorization: =key_sWBe7P69xglpBgnX8tLVQsmcFNC2RVN9HU."
+    api_record = PIIRecord(
+        id="api",
+        text=api_text,
+        spans=[
+            PIISpan(
+                start=16,
+                end=54,
+                label=PIIType.API_KEY,
+                text="key_sWBe7P69xglpBgnX8tLVQsmcFNC2RVN9HU",
+            )
+        ],
+    )
+    assert_bioes_round_trip(api_record, [(0, 15), (15, 19), (19, 54), (54, 55)])
+
+    address_text = "Delivery to: H.No. 911, Kara Road, Khora . Call later."
+    address_record = PIIRecord(
+        id="address",
+        text=address_text,
+        spans=[
+            PIISpan(
+                start=13,
+                end=41,
+                label=PIIType.STREET_ADDRESS,
+                text="H.No. 911, Kara Road, Khora ",
+            )
+        ],
+    )
+    assert_bioes_round_trip(address_record, [(0, 13), (13, 40), (40, 42), (42, 54)])
+
+
+def test_token_intersecting_two_spans_fails_loudly():
+    text = "Alice/Bob"
+    record = PIIRecord(
+        id="collision",
+        text=text,
+        spans=[
+            PIISpan(start=0, end=5, label=PIIType.PERSON, text="Alice"),
+            PIISpan(start=6, end=9, label=PIIType.USERNAME, text="Bob"),
+        ],
+    )
+    with pytest.raises(ValueError, match="BIOES cannot represent both"):
+        encode_bioes(record, [(0, 9)])
+
+
 def test_viterbi_rejects_illegal_start_and_transition():
     n = len(ID2LABEL)
     logits = [[0.0] * n for _ in range(2)]
@@ -56,6 +105,17 @@ def test_viterbi_rejects_illegal_start_and_transition():
         LABEL2ID["B-PERSON"],
         LABEL2ID["E-PERSON"],
     ]
+
+
+def test_vectorized_viterbi_matches_single_record_decoder():
+    generator = torch.Generator().manual_seed(42)
+    logits = torch.randn(3, 7, len(ID2LABEL), generator=generator).numpy()
+    lengths = [7, 4, 1]
+    expected = [
+        constrained_viterbi(logits[index, :length].tolist())
+        for index, length in enumerate(lengths)
+    ]
+    assert constrained_viterbi_batch(logits, lengths) == expected
 
 
 def test_all_label_paths_have_expected_width():
