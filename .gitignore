@@ -63,3 +63,10 @@ data/teacher_token_sample.jsonl
 # rebuilds them. reports/data_card_v3.md records the count, registers, seed and
 # token cost so the artifact stays described even though it is not committed.
 !data/carriers_v3.jsonl
+
+# --- Gated external corpora (ADR 0022) ---
+# bigcode/bigcode-pii-dataset Term 2: "You agree that you will not share
+# the PII dataset or any modified versions for whatever purpose." It also
+# contains REAL PII scraped from public repositories. Numbers derived from
+# it may be published; the data and anything derived from it may not.
+data/external/
