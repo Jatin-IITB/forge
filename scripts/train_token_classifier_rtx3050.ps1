@@ -77,7 +77,7 @@ Write-Host "Starting RTX 3050 QLoRA training..."
 # $ErrorActionPreference = "Stop" turns native-command stderr, once captured by
 # 2>&1, into a TERMINATING error. Python writes warnings and progress bars to
 # stderr constantly, so with Stop in force a single benign notice kills a
-# multi-hour run before the first training step — which is exactly how this was
+# multi-hour run before the first training step. That is exactly how this was
 # found: a "set a HF_TOKEN for higher rate limits" hint aborted the run.
 # Relax it only around this call and gate on the exit code, which is the thing
 # that actually reports failure.
@@ -88,7 +88,7 @@ $TrainExitCode = $LASTEXITCODE
 $ErrorActionPreference = $PreviousErrorAction
 
 if ($TrainExitCode -ne 0) {
-    throw "Training failed (exit code $TrainExitCode) — see $LogPath"
+    throw "Training failed (exit code $TrainExitCode). See $LogPath"
 }
 
 Write-Host "Merged classifier: $OutputDir/final-merged"
