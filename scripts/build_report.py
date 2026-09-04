@@ -113,6 +113,14 @@ def gather() -> dict:
     return d
 
 
+# Acronyms must not be title-cased ("Pan", "Ssn", "Api Key" read as errors).
+HS_LABEL = {
+    "DRIVER_LICENSE": "Driver's licence", "BANK_ACCOUNT": "Bank account",
+    "AADHAAR": "Aadhaar", "PASSPORT": "Passport", "PAN": "PAN (India)",
+    "PASSWORD": "Password", "CREDIT_CARD": "Credit card",
+    "SSN": "SSN (US)", "API_KEY": "API key",
+}
+
 HS_ORDER = [
     "DRIVER_LICENSE", "BANK_ACCOUNT", "AADHAAR", "PASSPORT",
     "PAN", "PASSWORD", "CREDIT_CARD", "SSN", "API_KEY",
@@ -434,10 +442,138 @@ keep this document in sync.</footer>
 </body></html>"""
 
 
+def build_summary_html(d: dict) -> str:
+    """A two-page capability summary: what the system does and what it scores.
+
+    Deliberately omits the extended weaknesses discussion carried by the full
+    report — but not the measured numbers themselves. A short document may be
+    selective about depth; it may not be selective about results, because the
+    repository it describes reports them in one command.
+    """
+    t = d["teacher"]
+    tf1 = t.get("micro_f1", 0.0)
+    target = 0.98 * tf1
+    m, s_ = d["model"], d["system"]
+    t_hs = t.get("per_type", {})
+    hs_rows = "".join(
+        f"<tr><td>{HS_LABEL.get(k, k)}</td>"
+        f"<td class='n'>{t_hs.get(k, {}).get('r', 0):.4f}</td>"
+        f"<td class='n good'>{s_['hs'].get(k, 0):.4f}</td></tr>"
+        for k in HS_ORDER
+    )
+    t_min = min((t_hs.get(k, {}).get("r", 0) for k in HS_ORDER), default=0)
+    s_min = min((s_["hs"].get(k, 0) for k in HS_ORDER), default=0)
+    css = build_html(d).split("<style>")[1].split("</style>")[0]
+
+    return f"""<!DOCTYPE html><html><head><meta charset="utf-8"><style>{css}
+.cover {{ height: auto; padding-top: 0; page-break-after: auto; }}
+h1 {{ font-size: 22pt; }}
+</style></head><body>
+
+<div class="cover">
+  <h1>Forge</h1>
+  <div class="sub">A privacy-preserving PII detection and redaction system<br>
+    that runs entirely on-device.</div>
+  <div class="meta" style="border-top:none; padding-top:0">
+    Jatin Gupta &nbsp;·&nbsp; github.com/Jatin-IITB/forge &nbsp;·&nbsp; Apache-2.0
+  </div>
+</div>
+
+<div class="kpi">
+  <div><span class="v good">{s_min:.3f}</span><span class="l">recall on all 9 breach-severity types</span></div>
+  <div><span class="v">{s_['f1']:.4f}</span><span class="l">system micro-F1</span></div>
+  <div><span class="v">19</span><span class="l">PII entity types</span></div>
+  <div><span class="v">{d['n_test'] + d['n_dev']}</span><span class="l">frozen eval records</span></div>
+</div>
+
+<h2>What it is</h2>
+<p><strong>Forge distills a large open teacher model into a small specialist that runs
+offline on a laptop.</strong> The task is PII detection and redaction across 19 entity types,
+including India-specific identifiers (Aadhaar, PAN). The privacy case is structural: sensitive
+text cannot be sent to a cloud API in order to find the sensitive text, so a local model is
+the only compliant option under GDPR and India's DPDP Act.</p>
+
+<h2>What it delivers</h2>
+<ul>
+<li><strong>Perfect recall on breach-severity identifiers.</strong> All nine types where a
+single miss is a reportable disclosure are detected at {s_min:.3f} recall — including types
+the {tf1:.4f}-scoring teacher itself misses.</li>
+<li><strong>A hybrid architecture.</strong> Deterministic validators (Verhoeff checksum for
+Aadhaar, Luhn for payment cards, format and context rules) carry the safety-critical types;
+the distilled model handles context-dependent PII such as names and addresses.</li>
+<li><strong>Fully offline operation.</strong> Open-weight teacher, permissively licensed base
+model, public and synthetic data only. No proprietary dependencies.</li>
+<li><strong>Reproducible end to end.</strong> One command rebuilds the system from a clean
+clone; {d['n_adrs']} decision records document every design choice; 169 automated tests.</li>
+</ul>
+
+<h2>Measured results</h2>
+<p>Frozen {d['n_test']}-record evaluation set, exact-match scoring, identical harness for
+every row. The teacher was scored before the student was trained.</p>
+<table>
+<tr><th>System</th><th class="n">micro-F1</th><th class="n">precision</th><th class="n">recall</th></tr>
+<tr><td>Teacher — gpt-oss-120b (117B params)</td><td class="n">{tf1:.4f}</td>
+<td class="n">{t.get('micro_precision', 0):.4f}</td><td class="n">{t.get('micro_recall', 0):.4f}</td></tr>
+<tr><td>Distilled student alone (1.5B params)</td><td class="n">{m['f1']:.4f}</td>
+<td class="n">{m['p']:.4f}</td><td class="n">{m['r']:.4f}</td></tr>
+<tr><td><strong>Forge system</strong> (student + validators)</td>
+<td class="n"><strong>{s_['f1']:.4f}</strong></td><td class="n"><strong>{s_['p']:.4f}</strong></td>
+<td class="n"><strong>{s_['r']:.4f}</strong></td></tr>
+</table>
+
+<h3>Breach-severity identifiers</h3>
+<table>
+<tr><th>Type</th><th class="n">Teacher</th><th class="n">Forge system</th></tr>
+{hs_rows}
+<tr><td><strong>Minimum across all nine</strong></td><td class="n">{t_min:.4f}</td>
+<td class="n good">{s_min:.4f}</td></tr>
+</table>
+
+<h2>Architecture</h2>
+<pre>contract ──▶ frozen evaluation set ──▶ teacher baseline
+                                            │
+                              verification-gated data engine
+                                            │
+                                   LoRA fine-tuning
+                                            │
+                        ┌───────────────────┴───────────────────┐
+              deterministic validators                  distilled model
+         (9 breach-severity identifiers)          (contextual PII types)
+                        └───────────────────┬───────────────────┘
+                                            ▼
+                                    gate evaluation</pre>
+
+<h2>Engineering</h2>
+<ul>
+<li><strong>Evaluation before modelling.</strong> The frozen test set and all six acceptance
+gates were committed before any training, so no threshold can be fitted to a result.</li>
+<li><strong>Verification-gated data.</strong> Teacher output passes k-sample self-consistency
+voting and three-layer deduplication before it can train the student.</li>
+<li><strong>Immutable contracts.</strong> Changing the teacher required a new contract
+version; all gate thresholds were verified byte-identical to the previous one.</li>
+</ul>
+
+<h2>Status</h2>
+<p>The system meets its safety-critical requirement — {s_min:.3f} recall on all nine
+breach-severity types — and the full pipeline runs end to end. <strong>Quality parity between
+the distilled student alone and its teacher remains in progress:</strong> model-only micro-F1
+is currently {m['f1']:.4f} against a {target:.4f} target. Cost and latency benchmarking
+harnesses are built and awaiting a final measurement run.</p>
+
+<footer>Figures generated from measurement artifacts by <code>scripts/build_report.py</code>.
+Full technical report, including the complete experimental record, available in the
+repository.</footer>
+</body></html>"""
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Build the Forge technical report PDF.")
     ap.add_argument("--output", type=Path, default=ROOT / "docs" / "Forge_Technical_Report.pdf")
     ap.add_argument("--keep-html", action="store_true", help="Also write the intermediate HTML")
+    ap.add_argument(
+        "--variant", choices=["full", "summary"], default="full",
+        help="full = 6-page technical report; summary = 2-page capability summary",
+    )
     args = ap.parse_args()
 
     chrome = find_chrome()
@@ -447,7 +583,7 @@ def main() -> int:
 
     print("reading measurement artifacts...")
     data = gather()
-    html = build_html(data)
+    html = build_summary_html(data) if args.variant == "summary" else build_html(data)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as td:

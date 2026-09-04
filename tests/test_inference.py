@@ -7,6 +7,7 @@ import pytest
 from forge.inference import (
     _extract_json,
     build_messages,
+    parse_line_response,
     parse_response,
     reconstruct_offsets,
 )
@@ -48,6 +49,17 @@ def test_build_messages_compact_requests_minified_keys():
 def test_build_messages_rejects_compact_teacher_mode():
     with pytest.raises(ValueError, match="student inference"):
         build_messages("Hello world", teacher_mode=True, compact=True)
+
+
+def test_build_messages_line_requests_short_protocol():
+    msgs = build_messages("Hello world", line=True)
+    assert 'PERSON\t"Jane Doe"' in msgs[0]["content"]
+    assert "Hello world" in msgs[1]["content"]
+
+
+def test_build_messages_rejects_two_alternate_formats():
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        build_messages("Hello world", compact=True, line=True)
 
 
 # --- _extract_json ---
@@ -207,6 +219,33 @@ def test_parse_response_compact_shape():
         ("PERSON", "Alice"),
         ("EMAIL", "alice@example.com"),
     ]
+
+
+def test_parse_line_response_round_trip_and_escaping():
+    text = 'Alice said "use alice@example.com"'
+    raw = 'PERSON\t"Alice"\nEMAIL\t"alice@example.com"'
+    record, valid = parse_line_response("r1", text, raw)
+    assert valid
+    assert [(s.label.value, s.text) for s in record.spans] == [
+        ("PERSON", "Alice"),
+        ("EMAIL", "alice@example.com"),
+    ]
+
+
+def test_parse_line_response_empty_marker():
+    record, valid = parse_line_response("r1", "No PII", "-")
+    assert valid
+    assert record.spans == []
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ["", "PERSON Alice", 'INVALID\t"Alice"', 'PERSON\t"not present"'],
+)
+def test_parse_line_response_rejects_malformed_or_unmatched(raw):
+    record, valid = parse_line_response("r1", "Alice", raw)
+    assert not valid
+    assert record.spans == []
 
 
 def test_parse_response_invalid_json():

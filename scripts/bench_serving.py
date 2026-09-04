@@ -49,14 +49,17 @@ import platform
 import statistics
 import subprocess
 import sys
-import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from forge.grammar import compact_spans_gbnf
-from forge.inference import build_messages, parse_response
+from forge.grammar import (
+    compact_spans_gbnf,
+    compact_spans_json_schema,
+    line_spans_gbnf,
+)
+from forge.inference import build_messages, parse_line_response, parse_response
 from forge.schema import PIIRecord
 
 # ---------------------------------------------------------------------------
@@ -134,6 +137,7 @@ class Sample:
     error: str | None = None
     pred: PIIRecord | None = None
     ttft_s: float | None = None
+    attempts: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -165,30 +169,72 @@ def run_openai(args, gold: list[PIIRecord]) -> Run:
     client = OpenAI(base_url=args.base_url, api_key=args.api_key, max_retries=0,
                     timeout=args.timeout)
 
+    def extra_body_for(constraint: str) -> dict | None:
+        if constraint == "gbnf":
+            return {"grammar": compact_spans_gbnf()}
+        if constraint == "json-schema":
+            return {"json_schema": compact_spans_json_schema()}
+        if constraint == "line-gbnf":
+            return {"grammar": line_spans_gbnf()}
+        return None
+
+    first_constraint = (
+        "line-gbnf"
+        if args.line_grammar
+        else "gbnf"
+        if args.compact_grammar
+        else args.compact_constraint
+    )
+
     def one(rec: PIIRecord) -> Sample:
-        messages = build_messages(rec.text, compact=args.compact_prompt)
+        messages = build_messages(
+            rec.text,
+            compact=args.compact_prompt,
+            line=args.line_prompt,
+        )
         t0 = time.perf_counter()
         try:
-            extra_body = {"grammar": compact_spans_gbnf()} if args.compact_grammar else None
-            resp = client.chat.completions.create(
-                model=args.model,
-                messages=messages,
-                max_tokens=args.max_tokens,
-                temperature=args.temperature,
-                seed=args.seed,
-                extra_body=extra_body,
-            )
+            attempts: list[dict] = []
+
+            def request(constraint: str):
+                resp = client.chat.completions.create(
+                    model=args.model,
+                    messages=messages,
+                    max_tokens=args.max_tokens,
+                    temperature=args.temperature,
+                    seed=args.seed,
+                    extra_body=extra_body_for(constraint),
+                )
+                usage = getattr(resp, "usage", None)
+                raw = resp.choices[0].message.content or ""
+                parser = parse_line_response if args.line_prompt else parse_response
+                pred, valid = parser(rec.id, rec.text, raw, split=rec.split)
+                prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0 if usage else 0
+                completion_tokens = getattr(usage, "completion_tokens", 0) or 0 if usage else 0
+                attempts.append({
+                    "constraint": constraint,
+                    "schema_valid": valid,
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "raw": raw,
+                })
+                return pred, valid, prompt_tokens, completion_tokens
+
+            pred, valid, prompt_tokens, completion_tokens = request(first_constraint)
+            if not valid and args.retry_invalid != "none":
+                pred, valid, retry_prompt, retry_completion = request(args.retry_invalid)
+                prompt_tokens += retry_prompt
+                completion_tokens += retry_completion
+
             lat = time.perf_counter() - t0
-            usage = getattr(resp, "usage", None)
-            raw = resp.choices[0].message.content or ""
-            pred, valid = parse_response(rec.id, rec.text, raw, split=rec.split)
             return Sample(
                 rec_id=rec.id,
                 latency_s=lat,
-                prompt_tokens=getattr(usage, "prompt_tokens", 0) or 0 if usage else 0,
-                completion_tokens=getattr(usage, "completion_tokens", 0) or 0 if usage else 0,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
                 schema_valid=valid,
                 pred=pred,
+                attempts=attempts,
             )
         except Exception as e:  # noqa: BLE001
             return Sample(rec_id=rec.id, latency_s=time.perf_counter() - t0,
@@ -230,7 +276,11 @@ def run_transformers(args, gold: list[PIIRecord]) -> Run:
     model.eval()
 
     def one(rec: PIIRecord) -> Sample:
-        messages = build_messages(rec.text, compact=args.compact_prompt)
+        messages = build_messages(
+            rec.text,
+            compact=args.compact_prompt,
+            line=args.line_prompt,
+        )
         t0 = time.perf_counter()
         enc = tok.apply_chat_template(messages, add_generation_prompt=True,
                                       return_tensors="pt")
@@ -250,7 +300,8 @@ def run_transformers(args, gold: list[PIIRecord]) -> Run:
         n_in = int(input_ids.shape[-1])
         n_out = int(out.shape[-1]) - n_in
         raw = tok.decode(out[0][n_in:], skip_special_tokens=True)
-        pred, valid = parse_response(rec.id, rec.text, raw, split=rec.split)
+        parser = parse_line_response if args.line_prompt else parse_response
+        pred, valid = parser(rec.id, rec.text, raw, split=rec.split)
         return Sample(rec_id=rec.id, latency_s=lat, prompt_tokens=n_in,
                       completion_tokens=n_out, schema_valid=valid, pred=pred)
 
@@ -289,7 +340,11 @@ def summarize(args, run: Run, gold: list[PIIRecord]) -> dict:
         "max_tokens": args.max_tokens,
         "temperature": args.temperature,
         "compact_prompt": args.compact_prompt,
+        "line_prompt": args.line_prompt,
+        "line_grammar": args.line_grammar,
         "compact_grammar": args.compact_grammar,
+        "compact_constraint": args.compact_constraint,
+        "retry_invalid": args.retry_invalid,
         "gold": str(args.gold),
         "n_records": n,
         "n_ok": len(ok),
@@ -321,6 +376,14 @@ def summarize(args, run: Run, gold: list[PIIRecord]) -> dict:
             "completion_per_record": round(comp / len(ok), 2) if ok else 0,
             "output_tok_s_aggregate": round(comp / run.wall_clock_s, 2) if run.wall_clock_s else 0,
             "total_tok_s_aggregate": round((comp + prompt) / run.wall_clock_s, 2) if run.wall_clock_s else 0,
+        },
+        "retry": {
+            "records_retried": sum(1 for s in ok if len(s.attempts) > 1),
+            "request_attempts_total": sum(len(s.attempts) for s in ok),
+            "details": [
+                {"rec_id": s.rec_id, "attempts": s.attempts}
+                for s in ok if len(s.attempts) > 1
+            ],
         },
 
         # --- run_economics.py compatibility ---
@@ -434,9 +497,31 @@ def main() -> int:
         help="Request the compact s/l/t response shape",
     )
     ap.add_argument(
+        "--line-prompt",
+        action="store_true",
+        help="Request LABEL<TAB><JSON-string> lines from a line-target checkpoint",
+    )
+    ap.add_argument(
+        "--line-grammar",
+        action="store_true",
+        help="Force the escaped line protocol (OpenAI backend only)",
+    )
+    ap.add_argument(
         "--compact-grammar",
         action="store_true",
         help="Force the compact s/l/t response shape (OpenAI backend only)",
+    )
+    ap.add_argument(
+        "--compact-constraint",
+        choices=["none", "gbnf", "json-schema"],
+        default="none",
+        help="Constraint for the first compact request; json-schema uses LLGuidance when built in",
+    )
+    ap.add_argument(
+        "--retry-invalid",
+        choices=["none", "gbnf", "json-schema", "line-gbnf"],
+        default="none",
+        help="Retry an invalid alternate-format response once with this constraint",
     )
     ap.add_argument("--timeout", type=float, default=300.0)
     ap.add_argument("--warmup", type=int, default=2, help="Warmup requests, excluded from timing")
@@ -452,8 +537,23 @@ def main() -> int:
                     help="Also write predictions JSONL (for scoring with run_eval.py)")
     args = ap.parse_args()
 
-    if args.compact_grammar and args.backend != "openai":
-        ap.error("--compact-grammar requires the openai backend")
+    if (
+        args.compact_grammar
+        or args.line_grammar
+        or args.compact_constraint != "none"
+        or args.retry_invalid != "none"
+    ) and args.backend != "openai":
+        ap.error("compact constraints and retries require the openai backend")
+    if args.compact_grammar and args.compact_constraint != "none":
+        ap.error("--compact-grammar is an alias for --compact-constraint gbnf; use only one")
+    if args.retry_invalid in {"gbnf", "json-schema"} and not args.compact_prompt:
+        ap.error("compact --retry-invalid modes require --compact-prompt")
+    if args.retry_invalid == "line-gbnf" and not args.line_prompt:
+        ap.error("--retry-invalid line-gbnf requires --line-prompt")
+    if args.line_grammar and not args.line_prompt:
+        ap.error("--line-grammar requires --line-prompt")
+    if args.compact_prompt and args.line_prompt:
+        ap.error("--compact-prompt and --line-prompt are mutually exclusive")
 
     args.contention_at_start = _contention()
 

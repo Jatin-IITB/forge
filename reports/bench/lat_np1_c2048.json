@@ -1,0 +1,82 @@
+{
+  "config_name": "lat_np1_c2048",
+  "backend": "openai",
+  "model": "model-Q4_K_M.gguf",
+  "quant": "Q4_K_M",
+  "concurrency": 1,
+  "max_tokens": 1024,
+  "temperature": 0.0,
+  "gold": "data/gold/test.jsonl",
+  "n_records": 48,
+  "n_ok": 48,
+  "errors": 0,
+  "schema_valid": 48,
+  "wall_clock_s": 134.6305,
+  "sustained_s_per_record": 2.8048,
+  "records_per_s": 0.3565,
+  "usd_per_1k": 0.108718,
+  "cost_breakdown": {
+    "usd_per_1k": 0.108718,
+    "hardware_usd_per_1k": 0.106661,
+    "energy_usd_per_1k": 0.002057,
+    "machine_hours_per_1k": 0.779112,
+    "hardware_usd_per_hour": 0.136901,
+    "watts": 22.0
+  },
+  "latency": {
+    "mean_s": 2.8047,
+    "p50_s": 2.6681,
+    "p90_s": 3.3351,
+    "p95_s": 4.8394,
+    "p99_s": 6.2845,
+    "min_s": 1.3945,
+    "max_s": 6.2845
+  },
+  "tokens": {
+    "prompt_total": 13985,
+    "completion_total": 2221,
+    "prompt_per_record": 291.35,
+    "completion_per_record": 46.27,
+    "output_tok_s_aggregate": 16.5,
+    "total_tok_s_aggregate": 120.37
+  },
+  "avg_latency_s": 2.8048,
+  "avg_latency_s_basis": "wall_clock / n_records (machine-seconds per record)",
+  "mean_request_latency_s": 2.8047,
+  "p50_latency_s": 2.6681,
+  "p95_latency_s": 4.8394,
+  "total": 48,
+  "total_tokens_in": 13985,
+  "total_tokens_out": 2221,
+  "adapter": null,
+  "env": {
+    "platform": "macOS-26.3.1-arm64-arm-64bit",
+    "machine": "arm64",
+    "cpu": "Apple M1",
+    "ram_gb": 16.0,
+    "python": "3.12.13",
+    "server_cmd": "llama-server -m models/pii-1.5b-gguf/model-Q4_K_M.gguf -ngl 99 -np 1 -c 2048",
+    "llama_cpp_commit": "9cffdcc"
+  },
+  "contention_at_start": {
+    "loadavg_1m": 5.79,
+    "loadavg_5m": 6.31,
+    "loadavg_15m": 4.01,
+    "swapusage": "total = 7168.00M  used = 5431.81M  free = 1736.19M  (encrypted)",
+    "ncpu": "8"
+  },
+  "contention_at_end": {
+    "loadavg_1m": 4.48,
+    "loadavg_5m": 5.57,
+    "loadavg_15m": 4.06,
+    "swapusage": "total = 7168.00M  used = 5431.81M  free = 1736.19M  (encrypted)",
+    "ncpu": "8"
+  },
+  "timestamp": "2026-09-03T10:09:39+0530",
+  "repeat_passes": 1,
+  "server": {
+    "rss_mb_after_load": 1101,
+    "n_ctx_slot": 2048,
+    "n_slots": 1
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "config_name": "quantcmp_f16",
+  "backend": "openai",
+  "model": "model-f16.gguf",
+  "quant": "f16",
+  "concurrency": 32,
+  "max_tokens": 1024,
+  "temperature": 0.0,
+  "gold": "data/gold/test.jsonl",
+  "n_records": 385,
+  "n_ok": 385,
+  "errors": 0,
+  "schema_valid": 384,
+  "wall_clock_s": 322.5743,
+  "sustained_s_per_record": 0.83786,
+  "records_per_s": 1.1935,
+  "usd_per_1k": 0.032476,
+  "cost_breakdown": {
+    "usd_per_1k": 0.032476,
+    "hardware_usd_per_1k": 0.031862,
+    "energy_usd_per_1k": 0.000614,
+    "machine_hours_per_1k": 0.232738,
+    "hardware_usd_per_hour": 0.136901,
+    "watts": 22.0
+  },
+  "latency": {
+    "mean_s": 24.8485,
+    "p50_s": 19.5496,
+    "p90_s": 43.6175,
+    "p95_s": 62.1993,
+    "p99_s": 73.6284,
+    "min_s": 5.9008,
+    "max_s": 89.5113
+  },
+  "tokens": {
+    "prompt_total": 112558,
+    "completion_total": 19870,
+    "prompt_per_record": 292.36,
+    "completion_per_record": 51.61,
+    "output_tok_s_aggregate": 61.6,
+    "total_tok_s_aggregate": 410.53
+  },
+  "avg_latency_s": 0.83786,
+  "avg_latency_s_basis": "wall_clock / n_records (machine-seconds per record)",
+  "mean_request_latency_s": 24.8485,
+  "p50_latency_s": 19.5496,
+  "p95_latency_s": 62.1993,
+  "total": 385,
+  "total_tokens_in": 112558,
+  "total_tokens_out": 19870,
+  "adapter": null,
+  "env": {
+    "platform": "macOS-26.3.1-arm64-arm-64bit",
+    "machine": "arm64",
+    "cpu": "Apple M1",
+    "ram_gb": 16.0,
+    "python": "3.12.13",
+    "server_cmd": "llama-server -m models/pii-1.5b-gguf/model-f16.gguf -ngl 99 -np 32 -c 32768 --mlock",
+    "llama_cpp_commit": "9cffdcc"
+  },
+  "contention_at_start": {
+    "loadavg_1m": 2.12,
+    "loadavg_5m": 2.32,
+    "loadavg_15m": 2.54,
+    "swapusage": "total = 6144.00M  used = 5506.19M  free = 637.81M  (encrypted)",
+    "ncpu": "8"
+  },
+  "contention_at_end": {
+    "loadavg_1m": 2.7,
+    "loadavg_5m": 2.52,
+    "loadavg_15m": 2.58,
+    "swapusage": "total = 6144.00M  used = 5567.81M  free = 576.19M  (encrypted)",
+    "ncpu": "8"
+  },
+  "timestamp": "2026-09-03T11:29:47+0530",
+  "repeat_passes": 1,
+  "server": {
+    "rss_mb_after_load": 4405,
+    "n_ctx_slot": 1024,
+    "n_slots": 32
+  }
+}

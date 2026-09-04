@@ -1,0 +1,77 @@
+{
+  "config_name": "ATTRIB_fp16_mps_b1",
+  "backend": "transformers",
+  "model": "models/pii-1.5b-merged",
+  "quant": "fp16",
+  "concurrency": 1,
+  "max_tokens": 1024,
+  "temperature": 0.0,
+  "gold": "data/gold/test.jsonl",
+  "n_records": 48,
+  "n_ok": 48,
+  "errors": 0,
+  "schema_valid": 48,
+  "wall_clock_s": 262.9711,
+  "sustained_s_per_record": 5.47856,
+  "records_per_s": 0.1825,
+  "usd_per_1k": 0.212356,
+  "cost_breakdown": {
+    "usd_per_1k": 0.212356,
+    "hardware_usd_per_1k": 0.208339,
+    "energy_usd_per_1k": 0.004018,
+    "machine_hours_per_1k": 1.521823,
+    "hardware_usd_per_hour": 0.136901,
+    "watts": 22.0
+  },
+  "latency": {
+    "mean_s": 5.4778,
+    "p50_s": 4.7288,
+    "p90_s": 7.3837,
+    "p95_s": 9.8361,
+    "p99_s": 33.9802,
+    "min_s": 2.6742,
+    "max_s": 33.9802
+  },
+  "tokens": {
+    "prompt_total": 13985,
+    "completion_total": 2432,
+    "prompt_per_record": 291.35,
+    "completion_per_record": 50.67,
+    "output_tok_s_aggregate": 9.25,
+    "total_tok_s_aggregate": 62.43
+  },
+  "avg_latency_s": 5.47856,
+  "avg_latency_s_basis": "wall_clock / n_records (machine-seconds per record)",
+  "mean_request_latency_s": 5.4778,
+  "p50_latency_s": 4.7288,
+  "p95_latency_s": 9.8361,
+  "total": 48,
+  "total_tokens_in": 13985,
+  "total_tokens_out": 2432,
+  "adapter": null,
+  "env": {
+    "platform": "macOS-26.3.1-arm64-arm-64bit",
+    "machine": "arm64",
+    "cpu": "Apple M1",
+    "ram_gb": 16.0,
+    "python": "3.12.13",
+    "server_cmd": null,
+    "llama_cpp_commit": null
+  },
+  "contention_at_start": {
+    "loadavg_1m": 1.49,
+    "loadavg_5m": 2.02,
+    "loadavg_15m": 2.3,
+    "swapusage": "total = 6144.00M  used = 5543.81M  free = 600.19M  (encrypted)",
+    "ncpu": "8"
+  },
+  "contention_at_end": {
+    "loadavg_1m": 1.32,
+    "loadavg_5m": 1.76,
+    "loadavg_15m": 2.11,
+    "swapusage": "total = 7168.00M  used = 6058.50M  free = 1109.50M  (encrypted)",
+    "ncpu": "8"
+  },
+  "timestamp": "2026-09-03T11:41:33+0530",
+  "repeat_passes": 1
+}

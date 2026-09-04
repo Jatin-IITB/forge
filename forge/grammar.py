@@ -105,6 +105,48 @@ hex    ::= [0-9a-fA-F]
 """
 
 
+def compact_spans_json_schema() -> dict:
+    """JSON Schema for the compact ``s/l/t`` serving experiment.
+
+    A llama.cpp build with LLGuidance routes JSON Schema constraints through
+    that sampler, while an ordinary build converts the same schema to its
+    native grammar.  Keeping one schema lets the benchmark isolate the sampler
+    implementation without changing the legal response language.
+    """
+    return {
+        "type": "object",
+        "properties": {
+            "s": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "l": {"type": "string", "enum": [t.value for t in PIIType]},
+                        "t": {"type": "string"},
+                    },
+                    "required": ["l", "t"],
+                    "additionalProperties": False,
+                },
+            }
+        },
+        "required": ["s"],
+        "additionalProperties": False,
+    }
+
+
+def line_spans_gbnf() -> str:
+    """GBNF for ``LABEL<TAB><JSON string>`` rows or the empty ``-`` marker."""
+    labels = " | ".join(f'"\\"{t.value}\\""' for t in PIIType)
+    return f"""\
+root   ::= "-" | row ("\\n" row)*
+row    ::= label "\\t" string
+label  ::= {labels}
+string ::= "\\"" char* "\\""
+char   ::= [^"\\\\\\x7F\\x00-\\x1F] | "\\\\" (["\\\\bfnrt/] | "u" hex hex hex hex)
+hex    ::= [0-9a-fA-F]
+"""
+
+
 def spans_json_schema() -> dict:
     """The same constraint as a JSON Schema, for servers that take one.
 

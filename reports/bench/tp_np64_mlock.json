@@ -1,0 +1,82 @@
+{
+  "config_name": "tp_np64_mlock",
+  "backend": "openai",
+  "model": "model-Q4_K_M.gguf",
+  "quant": "Q4_K_M",
+  "concurrency": 64,
+  "max_tokens": 1024,
+  "temperature": 0.0,
+  "gold": "data/gold/test.jsonl",
+  "n_records": 128,
+  "n_ok": 128,
+  "errors": 0,
+  "schema_valid": 128,
+  "wall_clock_s": 141.1694,
+  "sustained_s_per_record": 1.10289,
+  "records_per_s": 0.9067,
+  "usd_per_1k": 0.042749,
+  "cost_breakdown": {
+    "usd_per_1k": 0.042749,
+    "hardware_usd_per_1k": 0.041941,
+    "energy_usd_per_1k": 0.000809,
+    "machine_hours_per_1k": 0.306357,
+    "hardware_usd_per_hour": 0.136901,
+    "watts": 22.0
+  },
+  "latency": {
+    "mean_s": 43.8618,
+    "p50_s": 40.285,
+    "p90_s": 71.844,
+    "p95_s": 79.2499,
+    "p99_s": 94.4754,
+    "min_s": 13.7037,
+    "max_s": 95.8907
+  },
+  "tokens": {
+    "prompt_total": 37391,
+    "completion_total": 6798,
+    "prompt_per_record": 292.12,
+    "completion_per_record": 53.11,
+    "output_tok_s_aggregate": 48.15,
+    "total_tok_s_aggregate": 313.02
+  },
+  "avg_latency_s": 1.10289,
+  "avg_latency_s_basis": "wall_clock / n_records (machine-seconds per record)",
+  "mean_request_latency_s": 43.8618,
+  "p50_latency_s": 40.285,
+  "p95_latency_s": 79.2499,
+  "total": 128,
+  "total_tokens_in": 37391,
+  "total_tokens_out": 6798,
+  "adapter": null,
+  "env": {
+    "platform": "macOS-26.3.1-arm64-arm-64bit",
+    "machine": "arm64",
+    "cpu": "Apple M1",
+    "ram_gb": 16.0,
+    "python": "3.12.13",
+    "server_cmd": "llama-server -m models/pii-1.5b-gguf/model-Q4_K_M.gguf -ngl 99 -np 64 -c 65536 --mlock",
+    "llama_cpp_commit": "9cffdcc"
+  },
+  "contention_at_start": {
+    "loadavg_1m": 1.95,
+    "loadavg_5m": 2.32,
+    "loadavg_15m": 2.84,
+    "swapusage": "total = 7168.00M  used = 5431.81M  free = 1736.19M  (encrypted)",
+    "ncpu": "8"
+  },
+  "contention_at_end": {
+    "loadavg_1m": 2.66,
+    "loadavg_5m": 2.31,
+    "loadavg_15m": 2.62,
+    "swapusage": "total = 6144.00M  used = 5171.25M  free = 972.75M  (encrypted)",
+    "ncpu": "8"
+  },
+  "timestamp": "2026-09-03T10:41:23+0530",
+  "repeat_passes": 2,
+  "server": {
+    "rss_mb_after_load": 3226,
+    "n_ctx_slot": 1024,
+    "n_slots": 64
+  }
+}

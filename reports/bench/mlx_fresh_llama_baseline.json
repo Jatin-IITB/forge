@@ -1,0 +1,165 @@
+{
+  "config_name": "mlx-fresh-llama-baseline",
+  "backend": "openai",
+  "model": "m",
+  "quant": null,
+  "concurrency": 32,
+  "max_tokens": 1024,
+  "temperature": 0.0,
+  "compact_prompt": true,
+  "line_prompt": false,
+  "line_grammar": false,
+  "compact_grammar": false,
+  "compact_constraint": "none",
+  "retry_invalid": "json-schema",
+  "gold": "data/gold/test.jsonl",
+  "n_records": 385,
+  "n_ok": 385,
+  "errors": 0,
+  "schema_valid": 385,
+  "wall_clock_s": 294.904,
+  "sustained_s_per_record": 0.76598,
+  "records_per_s": 1.3055,
+  "usd_per_1k": 0.029691,
+  "cost_breakdown": {
+    "usd_per_1k": 0.029691,
+    "hardware_usd_per_1k": 0.029129,
+    "energy_usd_per_1k": 0.000562,
+    "machine_hours_per_1k": 0.212773,
+    "hardware_usd_per_hour": 0.136901,
+    "watts": 22.0
+  },
+  "latency": {
+    "mean_s": 23.1239,
+    "p50_s": 20.816,
+    "p90_s": 36.8999,
+    "p95_s": 43.6715,
+    "p99_s": 54.5035,
+    "min_s": 8.4495,
+    "max_s": 64.7712
+  },
+  "tokens": {
+    "prompt_total": 112169,
+    "completion_total": 12912,
+    "prompt_per_record": 291.35,
+    "completion_per_record": 33.54,
+    "output_tok_s_aggregate": 43.78,
+    "total_tok_s_aggregate": 424.14
+  },
+  "retry": {
+    "records_retried": 4,
+    "request_attempts_total": 389,
+    "details": [
+      {
+        "rec_id": "pii-test-0001",
+        "attempts": [
+          {
+            "constraint": "none",
+            "schema_valid": false,
+            "prompt_tokens": 294,
+            "completion_tokens": 45,
+            "raw": "{\"s\":[{\"l\":\"PERSON\",\"t\":\"Jessica Holmes\"},{\"l\":\"PHONE\",\"t\":\"+634-216-0733\"},{\"l\":\"EMAIL\",\"t=\"wrightcaleb@example.org\"}]}"
+          },
+          {
+            "constraint": "json-schema",
+            "schema_valid": true,
+            "prompt_tokens": 294,
+            "completion_tokens": 45,
+            "raw": "{\"s\":[{\"l\":\"PERSON\",\"t\":\"Jessica Holmes\"},{\"l\":\"PHONE\",\"t\":\"+634-216-0733\"},{\"l\":\"EMAIL\",\"t\":\"wrightcaleb@example.org\"}]}"
+          }
+        ]
+      },
+      {
+        "rec_id": "pii-test-0046",
+        "attempts": [
+          {
+            "constraint": "none",
+            "schema_valid": false,
+            "prompt_tokens": 280,
+            "completion_tokens": 30,
+            "raw": "{\"s\":[{\"l\":\"URL\",\"t\":\"http://puri\\.net/\"},{\"l\":\"USERNAME\",\"t\":\"lucasrodney\"}]}"
+          },
+          {
+            "constraint": "json-schema",
+            "schema_valid": true,
+            "prompt_tokens": 280,
+            "completion_tokens": 29,
+            "raw": "{\"s\":[{\"l\":\"URL\",\"t\":\"http://puri.net/\"},{\"l\":\"USERNAME\",\"t\":\"lucasrodney\"}]}"
+          }
+        ]
+      },
+      {
+        "rec_id": "pii-test-0229",
+        "attempts": [
+          {
+            "constraint": "none",
+            "schema_valid": false,
+            "prompt_tokens": 293,
+            "completion_tokens": 46,
+            "raw": "{\"s\":[{\"l\":\"PERSON\",\"t\":\"Olivia King\"},{\"l\":\"PHONE\",\"t\":\"+134 332 0037\"},{\"l\":\"EMAIL\",\"t=\"ambercummings@example.net\"}]}"
+          },
+          {
+            "constraint": "json-schema",
+            "schema_valid": true,
+            "prompt_tokens": 293,
+            "completion_tokens": 46,
+            "raw": "{\"s\":[{\"l\":\"PERSON\",\"t\":\"Olivia King\"},{\"l\":\"PHONE\",\"t\":\"+134 332 0037\"},{\"l\":\"EMAIL\",\"t\":\"ambercummings@example.net\"}]}"
+          }
+        ]
+      },
+      {
+        "rec_id": "pii-test-0370",
+        "attempts": [
+          {
+            "constraint": "none",
+            "schema_valid": false,
+            "prompt_tokens": 284,
+            "completion_tokens": 36,
+            "raw": "{\"s\":[{\"l\":\"LICENSE\",\"t\":\"FL-29212779\"},{\"l\":\"DATE_OF_BIRTH\",\"t\":\"2028\"}}]"
+          },
+          {
+            "constraint": "json-schema",
+            "schema_valid": true,
+            "prompt_tokens": 284,
+            "completion_tokens": 38,
+            "raw": "{\"s\":[{\"l\":\"DRIVER_LICENSE\",\"t\":\"FL-29212779\"},{\"l\":\"DATE_OF_BIRTH\",\"t\":\"2028\"}]}"
+          }
+        ]
+      }
+    ]
+  },
+  "avg_latency_s": 0.76598,
+  "avg_latency_s_basis": "wall_clock / n_records (machine-seconds per record)",
+  "mean_request_latency_s": 23.1239,
+  "p50_latency_s": 20.816,
+  "p95_latency_s": 43.6715,
+  "total": 385,
+  "total_tokens_in": 112169,
+  "total_tokens_out": 12912,
+  "adapter": null,
+  "env": {
+    "platform": "macOS-26.3.1-arm64-arm-64bit",
+    "machine": "arm64",
+    "cpu": "Apple M1",
+    "ram_gb": 16.0,
+    "python": "3.12.13",
+    "server_cmd": "llama-server -m /Users/jatin1.gupta/Downloads/forge/models/pii-1.5b-gguf/model-Q8_0.gguf -ngl 99 -np 32 -c 32768 --mlock",
+    "llama_cpp_commit": "9cffdcc"
+  },
+  "contention_at_start": {
+    "loadavg_1m": 2.35,
+    "loadavg_5m": 2.44,
+    "loadavg_15m": 3.01,
+    "swapusage": "total = 9216.00M  used = 7543.19M  free = 1672.81M  (encrypted)",
+    "ncpu": "8"
+  },
+  "contention_at_end": {
+    "loadavg_1m": 8.38,
+    "loadavg_5m": 7.79,
+    "loadavg_15m": 5.55,
+    "swapusage": "total = 10240.00M  used = 9505.94M  free = 734.06M  (encrypted)",
+    "ncpu": "8"
+  },
+  "timestamp": "2026-09-04T09:30:04+0530",
+  "repeat_passes": 3
+}

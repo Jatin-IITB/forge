@@ -73,6 +73,31 @@ capitalization, or punctuation.
 - Generic place names used as context (e.g. "weather in Mumbai") are NOT PII.
 """
 
+LINE_SYSTEM_PROMPT = """\
+You are a PII (Personally Identifiable Information) detection system.
+
+Given the input text, identify ALL PII entities. Return one entity per line as:
+LABEL<TAB>"exact JSON-escaped substring"
+
+Valid PII types:
+PERSON, EMAIL, PHONE, STREET_ADDRESS, USERNAME, URL, IP_ADDRESS,
+LOCATION, DATE_OF_BIRTH, AGE, CREDIT_CARD, BANK_ACCOUNT, SSN,
+AADHAAR, PAN, PASSPORT, DRIVER_LICENSE, PASSWORD, API_KEY
+
+Example:
+PERSON\t"Jane Doe"
+EMAIL\t"jane@example.com"
+
+If NO PII is found, return one hyphen:
+-
+
+Rules:
+- Return ONLY entity lines or the single hyphen.
+- The quoted text must decode to an EXACT substring of the input.
+- Report every occurrence; do not skip duplicates.
+- Generic place names used as context (e.g. "weather in Mumbai") are NOT PII.
+"""
+
 TEACHER_SYSTEM_PROMPT = """\
 You are a PII (Personally Identifiable Information) detection system used \
 to generate training data. You must be thorough and explain your reasoning.
@@ -112,13 +137,18 @@ def build_messages(
     teacher_mode: bool = False,
     *,
     compact: bool = False,
+    line: bool = False,
 ) -> list[dict[str, str]]:
-    """Build the chat prompt, optionally requesting the compact serving format."""
-    if teacher_mode and compact:
-        raise ValueError("compact output is only defined for student inference")
+    """Build the chat prompt, optionally requesting an experimental serving format."""
+    if compact and line:
+        raise ValueError("compact and line output formats are mutually exclusive")
+    if teacher_mode and (compact or line):
+        raise ValueError("alternate output formats are only defined for student inference")
     prompt = (
         TEACHER_SYSTEM_PROMPT
         if teacher_mode
+        else LINE_SYSTEM_PROMPT
+        if line
         else COMPACT_SYSTEM_PROMPT
         if compact
         else SYSTEM_PROMPT
@@ -219,3 +249,35 @@ def parse_response(record_id: str, text: str, raw_response: str, split: str = "t
         return PIIRecord(id=record_id, text=text, spans=spans, split=split), True
     except (json.JSONDecodeError, ValueError, KeyError, TypeError):
         return PIIRecord(id=record_id, text=text, spans=[], split=split), False
+
+
+def parse_line_response(
+    record_id: str,
+    text: str,
+    raw_response: str,
+    split: str = "test",
+) -> tuple[PIIRecord, bool]:
+    """Parse ``LABEL<TAB><JSON string>`` lines used by compact-target retraining."""
+    raw = raw_response.strip()
+    if raw == "-":
+        return PIIRecord(id=record_id, text=text, spans=[], split=split), True
+    if not raw:
+        return PIIRecord(id=record_id, text=text, spans=[], split=split), False
+
+    raw_spans: list[dict[str, str]] = []
+    try:
+        for line in raw.splitlines():
+            label, separator, encoded_text = line.partition("\t")
+            if not separator or label not in VALID_LABELS:
+                raise ValueError("invalid line protocol label or separator")
+            span_text = json.loads(encoded_text)
+            if not isinstance(span_text, str) or not span_text:
+                raise ValueError("line protocol text must be a non-empty JSON string")
+            raw_spans.append({"label": label, "text": span_text})
+    except (json.JSONDecodeError, ValueError, TypeError):
+        return PIIRecord(id=record_id, text=text, spans=[], split=split), False
+
+    spans = reconstruct_offsets(text, raw_spans)
+    if len(spans) != len(raw_spans):
+        return PIIRecord(id=record_id, text=text, spans=[], split=split), False
+    return PIIRecord(id=record_id, text=text, spans=spans, split=split), True

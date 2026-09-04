@@ -75,6 +75,25 @@ def test_record_to_chat_preserves_labels():
     assert labels == {"PERSON", "EMAIL"}
 
 
+def test_record_to_chat_compact_format():
+    content = record_to_chat(_make_record(), output_format="compact")[2]["content"]
+    assert content == (
+        '{"s":[{"l":"PERSON","t":"Alice"},'
+        '{"l":"EMAIL","t":"alice@x.com"}]}'
+    )
+
+
+def test_record_to_chat_line_format_is_escaped_and_short():
+    content = record_to_chat(_make_record(), output_format="line")[2]["content"]
+    assert content == 'PERSON\t"Alice"\nEMAIL\t"alice@x.com"'
+    assert len(content) < len(record_to_chat(_make_record())[2]["content"])
+
+
+def test_record_to_chat_line_empty_marker():
+    rec = _make_record(text="No PII here", spans=[])
+    assert record_to_chat(rec, output_format="line")[2]["content"] == "-"
+
+
 def test_load_training_data_roundtrip():
     rec = _make_record()
     with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:

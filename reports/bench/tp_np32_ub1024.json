@@ -1,0 +1,82 @@
+{
+  "config_name": "tp_np32_ub1024",
+  "backend": "openai",
+  "model": "model-Q4_K_M.gguf",
+  "quant": "Q4_K_M",
+  "concurrency": 32,
+  "max_tokens": 1024,
+  "temperature": 0.0,
+  "gold": "data/gold/test.jsonl",
+  "n_records": 128,
+  "n_ok": 128,
+  "errors": 0,
+  "schema_valid": 128,
+  "wall_clock_s": 137.6466,
+  "sustained_s_per_record": 1.07536,
+  "records_per_s": 0.9299,
+  "usd_per_1k": 0.041683,
+  "cost_breakdown": {
+    "usd_per_1k": 0.041683,
+    "hardware_usd_per_1k": 0.040894,
+    "energy_usd_per_1k": 0.000789,
+    "machine_hours_per_1k": 0.298712,
+    "hardware_usd_per_hour": 0.136901,
+    "watts": 22.0
+  },
+  "latency": {
+    "mean_s": 24.212,
+    "p50_s": 20.8664,
+    "p90_s": 37.5977,
+    "p95_s": 47.4271,
+    "p99_s": 58.5553,
+    "min_s": 7.8139,
+    "max_s": 74.5215
+  },
+  "tokens": {
+    "prompt_total": 37391,
+    "completion_total": 6798,
+    "prompt_per_record": 292.12,
+    "completion_per_record": 53.11,
+    "output_tok_s_aggregate": 49.39,
+    "total_tok_s_aggregate": 321.03
+  },
+  "avg_latency_s": 1.07536,
+  "avg_latency_s_basis": "wall_clock / n_records (machine-seconds per record)",
+  "mean_request_latency_s": 24.212,
+  "p50_latency_s": 20.8664,
+  "p95_latency_s": 47.4271,
+  "total": 128,
+  "total_tokens_in": 37391,
+  "total_tokens_out": 6798,
+  "adapter": null,
+  "env": {
+    "platform": "macOS-26.3.1-arm64-arm-64bit",
+    "machine": "arm64",
+    "cpu": "Apple M1",
+    "ram_gb": 16.0,
+    "python": "3.12.13",
+    "server_cmd": "llama-server -m models/pii-1.5b-gguf/model-Q4_K_M.gguf -ngl 99 -np 32 -c 32768 --mlock -b 2048 -ub 1024",
+    "llama_cpp_commit": "9cffdcc"
+  },
+  "contention_at_start": {
+    "loadavg_1m": 2.57,
+    "loadavg_5m": 2.3,
+    "loadavg_15m": 2.61,
+    "swapusage": "total = 6144.00M  used = 5171.25M  free = 972.75M  (encrypted)",
+    "ncpu": "8"
+  },
+  "contention_at_end": {
+    "loadavg_1m": 3.56,
+    "loadavg_5m": 2.93,
+    "loadavg_15m": 2.81,
+    "swapusage": "total = 6144.00M  used = 5163.25M  free = 980.75M  (encrypted)",
+    "ncpu": "8"
+  },
+  "timestamp": "2026-09-03T10:46:50+0530",
+  "repeat_passes": 2,
+  "server": {
+    "rss_mb_after_load": 2340,
+    "n_ctx_slot": 1024,
+    "n_slots": 32
+  }
+}

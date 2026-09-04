@@ -8,12 +8,18 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Literal
 
-from forge.inference import SYSTEM_PROMPT, USER_TEMPLATE
+from forge.inference import build_messages
 from forge.schema import PIIRecord
 
+OutputFormat = Literal["verbose", "compact", "line"]
 
-def record_to_chat(record: PIIRecord) -> list[dict[str, str]]:
+
+def record_to_chat(
+    record: PIIRecord,
+    output_format: OutputFormat = "verbose",
+) -> list[dict[str, str]]:
     """Convert a PIIRecord to a chat-format training example.
 
     The assistant response is the JSON that the student should produce:
@@ -22,23 +28,40 @@ def record_to_chat(record: PIIRecord) -> list[dict[str, str]]:
     Offsets are not included — the model outputs {label, text} pairs and
     offset reconstruction happens post-hoc in parse_response.
     """
-    spans_out = [{"label": s.label.value, "text": s.text} for s in record.spans]
-    assistant_content = json.dumps({"spans": spans_out}, ensure_ascii=False)
+    if output_format == "verbose":
+        spans_out = [{"label": s.label.value, "text": s.text} for s in record.spans]
+        assistant_content = json.dumps({"spans": spans_out}, ensure_ascii=False)
+        messages = build_messages(record.text)
+    elif output_format == "compact":
+        spans_out = [{"l": s.label.value, "t": s.text} for s in record.spans]
+        assistant_content = json.dumps(
+            {"s": spans_out},
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        messages = build_messages(record.text, compact=True)
+    elif output_format == "line":
+        assistant_content = "\n".join(
+            f"{s.label.value}\t{json.dumps(s.text, ensure_ascii=False)}"
+            for s in record.spans
+        ) or "-"
+        messages = build_messages(record.text, line=True)
+    else:
+        raise ValueError(f"unknown output format: {output_format}")
 
-    return [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": USER_TEMPLATE.format(text=record.text)},
-        {"role": "assistant", "content": assistant_content},
-    ]
+    return [*messages, {"role": "assistant", "content": assistant_content}]
 
 
-def load_training_data(path: Path) -> list[list[dict[str, str]]]:
+def load_training_data(
+    path: Path,
+    output_format: OutputFormat = "verbose",
+) -> list[list[dict[str, str]]]:
     """Load train.jsonl and convert to chat-format examples."""
     conversations = []
     for line in path.read_text(encoding="utf-8").splitlines():
         if line.strip():
             record = PIIRecord.model_validate_json(line)
-            conversations.append(record_to_chat(record))
+            conversations.append(record_to_chat(record, output_format=output_format))
     return conversations
 
 

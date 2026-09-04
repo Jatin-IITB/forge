@@ -53,8 +53,20 @@ except ImportError as e:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Train student model with LoRA SFT.")
-    ap.add_argument("--train-data", type=Path, required=True, help="Verified train.jsonl")
+    ap.add_argument(
+        "--train-data",
+        type=Path,
+        action="append",
+        required=True,
+        help="Verified training JSONL; repeat to concatenate reproducible tranches",
+    )
     ap.add_argument("--base-model", required=True, help="Base model name/path")
+    ap.add_argument(
+        "--val-data",
+        type=Path,
+        default=None,
+        help="Clean validation JSONL used for checkpoint selection",
+    )
     ap.add_argument("--output-dir", type=Path, required=True, help="Checkpoint output directory")
     ap.add_argument("--epochs", type=int, default=SFT_DEFAULTS["num_train_epochs"])
     ap.add_argument("--batch-size", type=int, default=SFT_DEFAULTS["per_device_train_batch_size"])
@@ -76,13 +88,23 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=SFT_DEFAULTS["seed"])
     ap.add_argument("--resume", action="store_true", help="Resume from latest checkpoint")
     ap.add_argument(
+        "--output-format",
+        choices=["verbose", "compact", "line"],
+        default="verbose",
+        help="Assistant target serialization (line is the shortest robust serving protocol)",
+    )
+    ap.add_argument(
         "--save-steps", type=int, default=None,
         help="Checkpoint every N steps instead of per epoch (bounds lost work on interruption)",
     )
     args = ap.parse_args()
 
     print(f"loading training data from {args.train_data}")
-    conversations = load_training_data(args.train_data)
+    conversations = [
+        conversation
+        for path in args.train_data
+        for conversation in load_training_data(path, output_format=args.output_format)
+    ]
     print(f"loaded {len(conversations)} training examples")
 
     if not conversations:
@@ -148,6 +170,15 @@ def main() -> int:
 
     dataset = Dataset.from_dict({"messages": conversations})
     dataset = dataset.map(format_conversation)
+    eval_dataset = None
+    if args.val_data:
+        val_conversations = load_training_data(
+            args.val_data,
+            output_format=args.output_format,
+        )
+        eval_dataset = Dataset.from_dict({"messages": val_conversations})
+        eval_dataset = eval_dataset.map(format_conversation)
+        print(f"loaded {len(val_conversations)} validation examples")
 
     sft_config = SFTConfig(
         output_dir=str(args.output_dir),
@@ -161,6 +192,13 @@ def main() -> int:
         save_strategy="steps" if args.save_steps else SFT_DEFAULTS["save_strategy"],
         save_steps=args.save_steps if args.save_steps else 500,
         save_total_limit=3,
+        eval_strategy=(
+            "steps" if args.save_steps else "epoch"
+        ) if eval_dataset is not None else "no",
+        eval_steps=args.save_steps if args.save_steps else None,
+        load_best_model_at_end=eval_dataset is not None,
+        metric_for_best_model="eval_loss" if eval_dataset is not None else None,
+        greater_is_better=False if eval_dataset is not None else None,
         bf16=use_bf16,
         fp16=use_fp16,
         seed=args.seed,
@@ -173,6 +211,7 @@ def main() -> int:
         model=model,
         args=sft_config,
         train_dataset=dataset,
+        eval_dataset=eval_dataset,
         processing_class=tokenizer,
     )
 
@@ -228,6 +267,9 @@ def main() -> int:
         "max_length": args.max_seq_length,
         "seed": args.seed,
         "train_examples": len(conversations),
+        "train_data": [str(path) for path in args.train_data],
+        "val_data": str(args.val_data) if args.val_data else None,
+        "output_format": args.output_format,
     }
     meta_path = args.output_dir / "train_meta.json"
     meta_path.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")

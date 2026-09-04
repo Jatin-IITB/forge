@@ -121,15 +121,16 @@ both earlier estimates.
 
 Student is `run_002`. Model-only unless stated; system = model + validator layer.
 
-**Shipped artifact: `Q8_0` GGUF, 1647 MB**, selected by the pre-committed rule that
-quantization breaking a gate does not ship — `Q4_K_M` is 661 MB smaller but costs
-−0.0151 F1, over the ≤0.01 exit gate. Honest wrinkle: `Q4_K_M` is the only build
-that passes G2, so neither artifact dominates.
+**Shipped artifact: `Q8_0` GGUF, 1647 MB, decoded under a GBNF grammar.**
+`Q8_0` was selected by the pre-committed rule that quantization breaking a gate
+does not ship — `Q4_K_M` is 661 MB smaller but costs −0.0151 F1, over the ≤0.01
+exit gate. Constrained decoding (ADR 0016) then makes schema validity structural,
+which resolves the wrinkle that `Q4_K_M` had been the only build passing G2.
 
 | Gate | Threshold | Measured | Verdict |
 |---|---|---|---|
-| G1 quality parity | ≥ 0.98× teacher (0.9292) | **0.6360** [0.5958, 0.6747]; ratio **0.6744** | ❌ **FAIL** — structural, ~0.29 below |
-| G2 schema validity | ≥ 99.9% | **99.74%** (384/385) | ❌ **FAIL** by one record — *and not measurable at n=385* |
+| G1 quality parity | ≥ 0.98× teacher (0.9292) | **0.6198** [0.5788, 0.6595]; ratio **0.6537** | ❌ **FAIL** — shipped config; see ADR 0016 |
+| G2 schema validity | ≥ 99.9% | **100%** (385/385, constrained decoding) | ✅ **PASS** — structural, not empirical |
 | G3 cost per 1k | ≤ $0.01594 | **$0.03004** — **0.189×** teacher | ❌ **FAIL** by 1.89× (±30% machine variance) |
 | G4 p95 latency | ≤ 0.2728 s | **5.413 s** — **3.97×** teacher | ❌ **FAIL** — *below the hardware floor* |
 | G5 deployability | laptop, quantized | 1647 MB file / 3080 MB RSS, fully local on a 16 GB M1 | ✅ **PASS** |
@@ -138,8 +139,17 @@ that passes G2, so neither artifact dominates.
 | High-severity precision | — *(not gated)* | **1.0000**, 0 false positives across 571 | ✅ |
 | High-severity recall (per type) | ≥ 0.99 each | 1.0000 each, but n=15–41 supports only 0.819–0.930 | ⚠️ **not measurable** |
 
-G2 is recorded as a failure rather than rounded up. A threshold that bends under
-a single record out of 385 is not a threshold.
+**G1 carries the shipped configuration's number, which is the lower one.**
+Unconstrained decoding scores 0.6360 (ratio 0.6707) but fails G2 at 384/385.
+Shipping the grammar for its recall while quoting the unconstrained F1 for parity
+would be selecting a metric per gate to flatter each, so the F1 cost is taken on
+the record. The difference — precision −0.0376 against recall +0.0101, with zero
+true positives lost — is set out in ADR 0016.
+
+G2 previously failed at 0.9974 and was recorded as a failure rather than rounded
+up: `0.999 × 385 = 384.6`, so one malformed record out of 385 failed it and no
+achievable score lay between 384/385 and 385/385. It now passes by construction
+rather than by margin.
 
 The per-type floor cannot be demonstrated on this test set at any performance
 level: proving ≥ 0.99 at 95% confidence with zero misses requires **n ≥ 299 per

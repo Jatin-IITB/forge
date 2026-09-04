@@ -34,7 +34,7 @@ from pathlib import Path
 
 from forge import ci
 from forge.eval import evaluate
-from forge.grammar import compact_spans_gbnf, spans_gbnf
+from forge.grammar import compact_spans_gbnf, compact_spans_json_schema, spans_gbnf
 from forge.inference import build_messages, parse_response
 from forge.schema import PIIRecord
 
@@ -56,35 +56,81 @@ def _call(
     base_url: str,
     rec: PIIRecord,
     grammar: str | None,
+    json_schema: dict | None,
+    retry_constraint: str,
     max_tokens: int,
     compact_prompt: bool,
     retries: int = 3,
 ):
-    body = {
+    base_body = {
         "model": "m",
         "messages": build_messages(rec.text, compact=compact_prompt),
         "max_tokens": max_tokens,
         "temperature": 0.0,
     }
-    if grammar:
-        body["grammar"] = grammar
-    req = urllib.request.Request(
-        f"{base_url}/chat/completions",
-        data=json.dumps(body).encode(),
-        headers={"Content-Type": "application/json"},
-    )
-    last: Exception | None = None
-    for _ in range(retries):
-        try:
-            d = json.loads(urllib.request.urlopen(req, timeout=300).read())
-            return d["choices"][0]["message"]["content"], d["usage"]["completion_tokens"]
-        except (urllib.error.URLError, TimeoutError, KeyError, ValueError) as e:
-            last = e
-            time.sleep(2)
-    raise RuntimeError(f"{rec.id}: {last}")
+
+    def request(*, grammar_value: str | None = None, schema_value: dict | None = None):
+        body = dict(base_body)
+        if grammar_value:
+            body["grammar"] = grammar_value
+        if schema_value:
+            body["json_schema"] = schema_value
+        req = urllib.request.Request(
+            f"{base_url}/chat/completions",
+            data=json.dumps(body).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        last: Exception | None = None
+        for _ in range(retries):
+            try:
+                d = json.loads(urllib.request.urlopen(req, timeout=300).read())
+                return d["choices"][0]["message"]["content"], d["usage"]["completion_tokens"]
+            except (urllib.error.URLError, TimeoutError, KeyError, ValueError) as e:
+                last = e
+                time.sleep(2)
+        raise RuntimeError(f"{rec.id}: {last}")
+
+    raw, n_tok = request(grammar_value=grammar, schema_value=json_schema)
+    attempt_details = [
+        {
+            "constraint": "json-schema" if json_schema else "gbnf" if grammar else "none",
+            "raw": raw,
+            "completion_tokens": n_tok,
+        }
+    ]
+    _, valid = parse_response(rec.id, rec.text, raw, split=rec.split)
+    attempts = 1
+    if not valid and retry_constraint != "none":
+        raw, retry_tok = request(
+            grammar_value=compact_spans_gbnf() if retry_constraint == "gbnf" else None,
+            schema_value=(
+                compact_spans_json_schema()
+                if retry_constraint == "json-schema"
+                else None
+            ),
+        )
+        attempt_details.append(
+            {
+                "constraint": retry_constraint,
+                "raw": raw,
+                "completion_tokens": retry_tok,
+            }
+        )
+        n_tok += retry_tok
+        attempts += 1
+    return raw, n_tok, attempts, attempt_details
 
 
-def run_arm(name, grammar, compact_prompt, gold, args, pass_number):
+def run_arm(
+    name,
+    grammar,
+    json_schema,
+    retry_constraint,
+    compact_prompt,
+    gold,
+    args,
+    pass_number,
+):
     contention_at_start = _contention()
     t0 = time.monotonic()
     with ThreadPoolExecutor(max_workers=args.concurrency) as ex:
@@ -94,6 +140,8 @@ def run_arm(name, grammar, compact_prompt, gold, args, pass_number):
                     args.base_url,
                     r,
                     grammar,
+                    json_schema,
+                    retry_constraint,
                     args.max_tokens,
                     compact_prompt,
                 ),
@@ -102,9 +150,13 @@ def run_arm(name, grammar, compact_prompt, gold, args, pass_number):
         )
     wall = time.monotonic() - t0
 
-    preds, valid, toks = [], 0, 0
-    for rec, (raw, n_tok) in zip(gold, outs):
+    preds, valid, toks, request_attempts = [], 0, 0, 0
+    retry_details = []
+    for rec, (raw, n_tok, attempts, attempt_details) in zip(gold, outs):
         toks += n_tok
+        request_attempts += attempts
+        if attempts > 1:
+            retry_details.append({"rec_id": rec.id, "attempts": attempt_details})
         pred, ok = parse_response(rec.id, rec.text, raw, split="test")
         valid += ok
         preds.append(pred or PIIRecord(id=rec.id, text=rec.text, spans=[], split="test"))
@@ -125,6 +177,9 @@ def run_arm(name, grammar, compact_prompt, gold, args, pass_number):
         "n": len(gold),
         "schema_rate": valid / len(gold),
         "tokens_per_record": toks / len(gold),
+        "records_retried": request_attempts - len(gold),
+        "request_attempts": request_attempts,
+        "retry_details": retry_details,
         "wall_s": wall,
         "s_per_record": sustained,
         "records_per_s": len(gold) / wall,
@@ -153,28 +208,37 @@ def main() -> int:
     gold = _load(args.gold)
     if args.experiment == "compact":
         arms = [
-            ("verbose_baseline", None, False),
-            ("compact_grammar", compact_spans_gbnf(), False),
-            ("compact_prompt", None, True),
-            ("compact_prompt_grammar", compact_spans_gbnf(), True),
+            ("verbose_baseline", None, None, "none", False),
+            ("compact_prompt_grammar", compact_spans_gbnf(), None, "none", True),
+            ("compact_prompt_retry", None, None, "gbnf", True),
+            (
+                "compact_prompt_json_schema",
+                None,
+                compact_spans_json_schema(),
+                "none",
+                True,
+            ),
+            ("compact_prompt_json_retry", None, None, "json-schema", True),
         ]
     else:
         arms = [
-            ("unconstrained", None, False),
-            ("grammar_permissive", spans_gbnf(exact_spacing=False), False),
-            ("grammar_exact", spans_gbnf(exact_spacing=True), False),
+            ("unconstrained", None, None, "none", False),
+            ("grammar_permissive", spans_gbnf(exact_spacing=False), None, "none", False),
+            ("grammar_exact", spans_gbnf(exact_spacing=True), None, "none", False),
         ]
 
-    passes: dict[str, list[dict]] = {name: [] for name, _, _ in arms}
+    passes: dict[str, list[dict]] = {name: [] for name, *_ in arms}
     saved: dict[str, list[PIIRecord]] = {}
     best: dict[str, dict] = {}
     for pass_idx in range(args.repeat):
         ordered = arms if pass_idx % 2 == 0 else list(reversed(arms))
-        for name, grammar, compact_prompt in ordered:
+        for name, grammar, json_schema, retry_constraint, compact_prompt in ordered:
             print(f"running {name} pass {pass_idx + 1}/{args.repeat} ...", flush=True)
             row, preds = run_arm(
                 name,
                 grammar,
+                json_schema,
+                retry_constraint,
                 compact_prompt,
                 gold,
                 args,
@@ -186,7 +250,7 @@ def main() -> int:
                 saved[name] = preds
 
     rows = []
-    for name, _, _ in arms:
+    for name, *_ in arms:
         row = dict(best[name])
         row["passes"] = passes[name]
         rows.append(row)

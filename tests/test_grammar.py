@@ -16,7 +16,13 @@ from pathlib import Path
 
 import pytest
 
-from forge.grammar import compact_spans_gbnf, spans_gbnf, spans_json_schema
+from forge.grammar import (
+    compact_spans_gbnf,
+    compact_spans_json_schema,
+    line_spans_gbnf,
+    spans_gbnf,
+    spans_json_schema,
+)
 from forge.schema import PIIType
 
 LLAMA_GRAMMAR_BIN = Path.home() / "llama.cpp" / "build" / "bin" / "test-grammar-parser"
@@ -133,11 +139,38 @@ class TestCompactVariant:
     def test_empty_list_is_representable(self):
         assert 'spans  ::= "[]"' in compact_spans_gbnf()
 
+    def test_json_schema_matches_compact_grammar_labels(self):
+        schema = compact_spans_json_schema()
+        labels = schema["properties"]["s"]["items"]["properties"]["l"]["enum"]
+        assert set(labels) == {t.value for t in PIIType}
+        assert schema["additionalProperties"] is False
+        assert schema["properties"]["s"]["items"]["additionalProperties"] is False
+
     @pytest.mark.skipif(not LLAMA_GRAMMAR_BIN.exists(), reason="llama.cpp grammar parser not built")
     def test_llama_cpp_parses_compact_grammar(self):
         proc = subprocess.run(
             [str(LLAMA_GRAMMAR_BIN)],
             input=compact_spans_gbnf(),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert proc.returncode == 0, proc.stderr
+
+
+class TestLineVariant:
+    def test_line_shape_and_every_type_are_reachable(self):
+        grammar = line_spans_gbnf()
+        assert 'root   ::= "-" | row ("\\n" row)*' in grammar
+        assert 'row    ::= label "\\t" string' in grammar
+        for pii_type in PIIType:
+            assert f'"\\"{pii_type.value}\\""' in grammar
+
+    @pytest.mark.skipif(not LLAMA_GRAMMAR_BIN.exists(), reason="llama.cpp grammar parser not built")
+    def test_llama_cpp_parses_line_grammar(self):
+        proc = subprocess.run(
+            [str(LLAMA_GRAMMAR_BIN)],
+            input=line_spans_gbnf(),
             capture_output=True,
             text=True,
             check=False,
