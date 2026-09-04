@@ -23,14 +23,23 @@ infer = [
     "openai>=1.0",   # OpenAI-compatible API client for vLLM / Ollama / etc.
 ]
 train = [
-    # Upper bounds added 2026-09-05. An unbounded `transformers>=4.40` resolved
-    # to 5.16.1 on a fresh Windows install — a major version this code had never
-    # met, because the Mac venv is eval-only and carries no transformers at all.
-    # It turned out to work (9/9 token-classifier tests pass on 5.16.1 with
-    # torch 2.11.0+cu128), so the ceilings sit *above* the tested version rather
-    # than below it. The point is that the range is now exercised, not open.
+    # transformers is pinned <5, and the reason is worth recording because the
+    # first attempt at this bound was wrong.
+    #
+    # An unbounded `transformers>=4.40` resolved to 5.16.1 on a fresh Windows
+    # install. `tests/test_token_classifier.py` passed 9/9 there, so the ceiling
+    # was first set to <6 on the strength of that. But those tests exercise BIOES
+    # alignment and a forward pass — they never construct `TrainingArguments`,
+    # which is where v5 actually breaks:
+    #
+    #     TypeError: TrainingArguments.__init__() got an unexpected keyword
+    #                argument 'warmup_ratio'
+    #
+    # The trainer passes ~20 kwargs that v5 refactored; warmup_ratio is simply
+    # the first to fail. A green test suite was not evidence about the code path
+    # that matters, and the bound is now set from a real training run instead.
     "torch>=2.1",
-    "transformers>=4.40,<6",
+    "transformers>=4.40,<5",
     "peft>=0.10,<1",
     "trl>=0.8,<2",
     "datasets>=2.18",
