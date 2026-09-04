@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.metadata
+import importlib.util
 import json
 import math
 import sys
@@ -180,6 +181,14 @@ def main() -> int:
     parser.add_argument("--max-length", type=int, default=512)
     parser.add_argument("--lora-r", type=int, default=16)
     parser.add_argument("--lora-alpha", type=int, default=32)
+    parser.add_argument(
+        "--qlora",
+        action="store_true",
+        help=(
+            "Load the 1.5B backbone in 4-bit NF4 for low-VRAM CUDA training. "
+            "The final artifact is reloaded and merged as fp16 on CPU."
+        ),
+    )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument(
@@ -217,9 +226,16 @@ def main() -> int:
     try:
         import torch
         from datasets import Dataset
-        from peft import LoraConfig, TaskType, get_peft_model
+        from peft import (
+            LoraConfig,
+            PeftModel,
+            TaskType,
+            get_peft_model,
+            prepare_model_for_kbit_training,
+        )
         from transformers import (
             AutoConfig,
+            BitsAndBytesConfig,
             DataCollatorForTokenClassification,
             Trainer,
             TrainingArguments,
@@ -242,16 +258,50 @@ def main() -> int:
 
     use_mps = torch.backends.mps.is_available()
     use_cuda = torch.cuda.is_available()
+    if args.qlora and not use_cuda:
+        parser.error("--qlora requires an NVIDIA CUDA GPU")
+    if args.qlora and importlib.util.find_spec("bitsandbytes") is None:
+        parser.error("--qlora requires bitsandbytes; install the project [train] extra")
+
     use_bf16 = use_cuda and torch.cuda.is_bf16_supported()
-    dtype = torch.float16 if use_mps else torch.bfloat16 if use_bf16 else torch.float32
+    use_fp16 = use_mps or (use_cuda and not use_bf16)
+    dtype = (
+        torch.float16
+        if use_fp16
+        else torch.bfloat16
+        if use_bf16
+        else torch.float32
+    )
+    quantization_config = None
+    if args.qlora:
+        quantization_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=dtype,
+            bnb_4bit_use_double_quant=True,
+        )
+        total_vram_gb = torch.cuda.get_device_properties(0).total_memory / 1024**3
+        print(
+            f"CUDA QLoRA: {torch.cuda.get_device_name(0)}, "
+            f"{total_vram_gb:.1f} GiB VRAM, compute dtype={dtype}"
+        )
+
     model = ForgeQwen2ForTokenClassification.from_pretrained(
         args.base_model,
         config=config,
         dtype=dtype,
+        quantization_config=quantization_config,
+        device_map={"": 0} if args.qlora else None,
         ignore_mismatched_sizes=True,
     )
+    if args.qlora:
+        model = prepare_model_for_kbit_training(
+            model,
+            use_gradient_checkpointing=True,
+        )
     model.set_class_weights(class_weights(train_rows))
-    model.enable_input_require_grads()
+    if not args.qlora:
+        model.enable_input_require_grads()
 
     lora = LoraConfig(
         task_type=TaskType.TOKEN_CLS,
@@ -288,8 +338,9 @@ def main() -> int:
         metric_for_best_model="span_f1",
         greater_is_better=True,
         save_total_limit=2,
-        fp16=use_mps,
+        fp16=use_fp16,
         bf16=use_bf16,
+        optim="paged_adamw_8bit" if args.qlora else "adamw_torch",
         gradient_checkpointing=True,
         seed=args.seed,
         report_to="none",
@@ -313,7 +364,41 @@ def main() -> int:
     trainer.save_model(str(adapter_dir))
     tokenizer.save_pretrained(str(adapter_dir))
 
-    merged = model.merge_and_unload()
+    if args.qlora:
+        # Merging directly into a bitsandbytes model would make the benchmark
+        # consume a training-only quantized proxy. Release trainer references,
+        # reload the same 1.5B backbone as fp16 on CPU, then apply the selected
+        # adapter. The shipped artifact is therefore independent of bnb.
+        import gc
+
+        del model
+        del trainer
+        gc.collect()
+        torch.cuda.empty_cache()
+
+        merge_config = AutoConfig.from_pretrained(args.base_model)
+        merge_config.num_labels = len(ID2LABEL)
+        merge_config.id2label = dict(enumerate(ID2LABEL))
+        merge_config.label2id = LABEL2ID
+        merge_config.forge_full_attention = args.full_attention
+        merge_config.use_cache = False
+        merge_config._attn_implementation = "eager"
+        merge_base = ForgeQwen2ForTokenClassification.from_pretrained(
+            args.base_model,
+            config=merge_config,
+            dtype=torch.float16,
+            ignore_mismatched_sizes=True,
+            low_cpu_mem_usage=True,
+        )
+        merged = PeftModel.from_pretrained(
+            merge_base,
+            str(adapter_dir),
+        ).merge_and_unload()
+        merged_dtype = "torch.float16"
+    else:
+        merged = model.merge_and_unload()
+        merged_dtype = str(dtype)
+
     merged_dir = args.output_dir / "final-merged"
     merged.save_pretrained(merged_dir, safe_serialization=True)
     tokenizer.save_pretrained(merged_dir)
@@ -330,6 +415,15 @@ def main() -> int:
             "validation": val_alignment,
         },
         "full_attention": args.full_attention,
+        "qlora": args.qlora,
+        "training_dtype": str(dtype),
+        "merged_dtype": merged_dtype,
+        "cuda_device": torch.cuda.get_device_name(0) if use_cuda else None,
+        "cuda_vram_gb": (
+            round(torch.cuda.get_device_properties(0).total_memory / 1024**3, 2)
+            if use_cuda
+            else None
+        ),
         "labels": ID2LABEL,
         "epochs": args.epochs,
         "batch_size": args.batch_size,
@@ -338,7 +432,14 @@ def main() -> int:
         "seed": args.seed,
         "versions": {
             package: importlib.metadata.version(package)
-            for package in ("torch", "transformers", "peft", "datasets", "accelerate")
+            for package in (
+                "torch",
+                "transformers",
+                "peft",
+                "datasets",
+                "accelerate",
+                *(("bitsandbytes",) if args.qlora else ()),
+            )
         },
     }
     (args.output_dir / "train_meta.json").write_text(
