@@ -272,6 +272,17 @@ def main() -> int:
         if use_bf16
         else torch.float32
     )
+    if use_cuda:
+        total_vram_gb = torch.cuda.get_device_properties(0).total_memory / 1024**3
+        print(
+            f"CUDA training: {torch.cuda.get_device_name(0)}, "
+            f"{total_vram_gb:.1f} GiB VRAM, precision={dtype}, qlora={args.qlora}"
+        )
+    elif use_mps:
+        print(f"MPS training: precision={dtype}, qlora=False")
+    else:
+        print(f"CPU training: precision={dtype}, qlora=False")
+
     quantization_config = None
     if args.qlora:
         quantization_config = BitsAndBytesConfig(
@@ -279,11 +290,6 @@ def main() -> int:
             bnb_4bit_quant_type="nf4",
             bnb_4bit_compute_dtype=dtype,
             bnb_4bit_use_double_quant=True,
-        )
-        total_vram_gb = torch.cuda.get_device_properties(0).total_memory / 1024**3
-        print(
-            f"CUDA QLoRA: {torch.cuda.get_device_name(0)}, "
-            f"{total_vram_gb:.1f} GiB VRAM, compute dtype={dtype}"
         )
 
     model = ForgeQwen2ForTokenClassification.from_pretrained(
@@ -332,6 +338,7 @@ def main() -> int:
         warmup_ratio=0.1,
         lr_scheduler_type="cosine",
         logging_steps=10,
+        logging_nan_inf_filter=False,
         eval_strategy="epoch",
         save_strategy="epoch",
         load_best_model_at_end=True,

@@ -2,6 +2,7 @@ param(
     [string]$TrainData = "data/train_v2.jsonl",
     [string]$ValData = "data/gold/val.jsonl",
     [string]$OutputDir = "checkpoints/token_classifier_rtx3050",
+    [string]$LogPath = "logs/token_classifier_rtx3050.log",
     [switch]$Resume
 )
 
@@ -63,11 +64,13 @@ if ($Resume) {
     $TrainArgs += "--resume"
 }
 
+New-Item -ItemType Directory -Force (Split-Path $LogPath -Parent) | Out-Null
 Write-Host "Starting RTX 3050 QLoRA training..."
-& $Python -u @TrainArgs
+& $Python -u @TrainArgs 2>&1 | Tee-Object -FilePath $LogPath
 if ($LASTEXITCODE -ne 0) {
     throw "Training failed"
 }
 
 Write-Host "Merged classifier: $OutputDir/final-merged"
 Write-Host "Training metadata: $OutputDir/train_meta.json"
+Write-Host "Training log: $LogPath"
