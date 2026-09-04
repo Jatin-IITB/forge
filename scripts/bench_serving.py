@@ -492,6 +492,7 @@ def run_token_classifier(args, gold: list[PIIRecord]) -> Run:
                 "batch_size": args.batch_size,
                 "token_input": args.token_input,
                 "length_bucket": args.length_bucket,
+                "max_length": args.max_length,
             },
         )
 
@@ -526,6 +527,7 @@ def summarize(args, run: Run, gold: list[PIIRecord]) -> dict:
         "batch_size": args.batch_size if args.backend == "token-classifier" else None,
         "token_input": args.token_input if args.backend == "token-classifier" else None,
         "length_bucket": args.length_bucket if args.backend == "token-classifier" else False,
+        "max_length": args.max_length if args.backend == "token-classifier" else None,
         "max_tokens": args.max_tokens,
         "temperature": args.temperature,
         "compact_prompt": args.compact_prompt,
@@ -758,6 +760,12 @@ def main() -> int:
         action="store_true",
         help="Batch token-classifier records by source character length to reduce padding",
     )
+    ap.add_argument(
+        "--max-length",
+        type=int,
+        default=512,
+        help="Tokenizer truncation length for the token-classifier backend",
+    )
     ap.add_argument("--max-tokens", type=int, default=1024)
     ap.add_argument("--temperature", type=float, default=0.0)
     ap.add_argument("--seed", type=int, default=42)
@@ -836,9 +844,14 @@ def main() -> int:
     if args.compact_prompt and args.line_prompt:
         ap.error("--compact-prompt and --line-prompt are mutually exclusive")
     if args.backend != "token-classifier" and (
-        args.device != "auto" or args.token_input != "raw" or args.length_bucket
+        args.device != "auto"
+        or args.token_input != "raw"
+        or args.length_bucket
+        or args.max_length != 512
     ):
-        ap.error("--device, --token-input, and --length-bucket are token-classifier options")
+        ap.error(
+            "--device, --token-input, --length-bucket, and --max-length are token-classifier options"
+        )
     if args.backend == "token-classifier" and args.concurrency != 1:
         ap.error("token-classifier uses --batch-size; leave --concurrency at 1")
     if args.repeat_selection == "median" and args.repeat % 2 == 0:

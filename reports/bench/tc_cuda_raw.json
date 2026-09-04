@@ -1,0 +1,160 @@
+{
+  "config_name": "tc-cuda-raw",
+  "backend": "token-classifier",
+  "model": "checkpoints\\token_classifier_rtx3050\\final-merged",
+  "quant": null,
+  "concurrency": 1,
+  "batch_size": 8,
+  "token_input": "raw",
+  "length_bucket": true,
+  "max_length": 512,
+  "max_tokens": 1024,
+  "temperature": 0.0,
+  "compact_prompt": false,
+  "line_prompt": false,
+  "line_grammar": false,
+  "compact_grammar": false,
+  "compact_constraint": "none",
+  "retry_invalid": "none",
+  "gold": "data\\gold\\test.jsonl",
+  "n_records": 385,
+  "n_ok": 385,
+  "errors": 0,
+  "schema_valid": 385,
+  "wall_clock_s": 3.9303,
+  "sustained_s_per_record": 0.01021,
+  "records_per_s": 97.957,
+  "usd_per_1k": 0.000396,
+  "cost_breakdown": {
+    "usd_per_1k": 0.000396,
+    "hardware_usd_per_1k": 0.000388,
+    "energy_usd_per_1k": 7e-06,
+    "machine_hours_per_1k": 0.002836,
+    "hardware_usd_per_hour": 0.136901,
+    "watts": 22.0
+  },
+  "latency": {
+    "mean_s": 0.0808,
+    "p50_s": 0.0658,
+    "p90_s": 0.1194,
+    "p95_s": 0.1211,
+    "p99_s": 0.1513,
+    "min_s": 0.0443,
+    "max_s": 0.1513
+  },
+  "tokens": {
+    "prompt_total": 9378,
+    "completion_total": 0,
+    "prompt_per_record": 24.36,
+    "completion_per_record": 0.0,
+    "source_total": 9378,
+    "source_per_record": 24.36,
+    "padded_input_total": 13086,
+    "padded_input_per_record": 33.99,
+    "padded_input_tok_s_aggregate": 3329.52,
+    "output_tok_s_aggregate": 0.0,
+    "total_tok_s_aggregate": 2386.08
+  },
+  "retry": {
+    "records_retried": 0,
+    "request_attempts_total": 0,
+    "details": []
+  },
+  "avg_latency_s": 0.01021,
+  "avg_latency_s_basis": "wall_clock / n_records (machine-seconds per record)",
+  "mean_request_latency_s": 0.0808,
+  "p50_latency_s": 0.0658,
+  "p95_latency_s": 0.1211,
+  "total": 385,
+  "total_tokens_in": 9378,
+  "total_tokens_out": 0,
+  "adapter": null,
+  "env": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "machine": "AMD64",
+    "cpu": null,
+    "ram_gb": null,
+    "python": "3.12.6",
+    "server_cmd": null,
+    "llama_cpp_commit": null
+  },
+  "runtime": {
+    "device": "cuda",
+    "dtype": "torch.bfloat16",
+    "batch_size": 8,
+    "token_input": "raw",
+    "length_bucket": true,
+    "max_length": 512
+  },
+  "contention_at_start": {
+    "loadavg_1m": 0.0,
+    "loadavg_5m": 0.0,
+    "loadavg_15m": 0.0,
+    "ncpu": "12",
+    "mem_percent": 58.5,
+    "swap_percent": 3.6,
+    "platform": "win32"
+  },
+  "contention_at_end": {
+    "loadavg_1m": 0.08,
+    "loadavg_5m": 0.02,
+    "loadavg_15m": 0.01,
+    "ncpu": "12",
+    "mem_percent": 66.5,
+    "swap_percent": 3.5,
+    "platform": "win32"
+  },
+  "timestamp": "2026-09-05T01:44:39+0530",
+  "repeat_passes": 2,
+  "repeat_selection": "first",
+  "repeat_summaries": [
+    {
+      "pass": 1,
+      "wall_clock_s": 3.9303,
+      "sustained_s_per_record": 0.01021,
+      "records_per_s": 97.957,
+      "contention_at_start": {
+        "loadavg_1m": 0.0,
+        "loadavg_5m": 0.0,
+        "loadavg_15m": 0.0,
+        "ncpu": "12",
+        "mem_percent": 58.5,
+        "swap_percent": 3.6,
+        "platform": "win32"
+      },
+      "contention_at_end": {
+        "loadavg_1m": 0.08,
+        "loadavg_5m": 0.02,
+        "loadavg_15m": 0.01,
+        "ncpu": "12",
+        "mem_percent": 66.5,
+        "swap_percent": 3.5,
+        "platform": "win32"
+      }
+    },
+    {
+      "pass": 2,
+      "wall_clock_s": 3.9079,
+      "sustained_s_per_record": 0.01015,
+      "records_per_s": 98.5194,
+      "contention_at_start": {
+        "loadavg_1m": 0.08,
+        "loadavg_5m": 0.02,
+        "loadavg_15m": 0.01,
+        "ncpu": "12",
+        "mem_percent": 66.6,
+        "swap_percent": 3.5,
+        "platform": "win32"
+      },
+      "contention_at_end": {
+        "loadavg_1m": 0.15,
+        "loadavg_5m": 0.03,
+        "loadavg_15m": 0.01,
+        "ncpu": "12",
+        "mem_percent": 62.1,
+        "swap_percent": 3.0,
+        "platform": "win32"
+      }
+    }
+  ]
+}
