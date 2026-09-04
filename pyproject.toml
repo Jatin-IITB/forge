@@ -23,10 +23,16 @@ infer = [
     "openai>=1.0",   # OpenAI-compatible API client for vLLM / Ollama / etc.
 ]
 train = [
+    # Upper bounds added 2026-09-05. An unbounded `transformers>=4.40` resolved
+    # to 5.16.1 on a fresh Windows install — a major version this code had never
+    # met, because the Mac venv is eval-only and carries no transformers at all.
+    # It turned out to work (9/9 token-classifier tests pass on 5.16.1 with
+    # torch 2.11.0+cu128), so the ceilings sit *above* the tested version rather
+    # than below it. The point is that the range is now exercised, not open.
     "torch>=2.1",
-    "transformers>=4.40",
-    "peft>=0.10",
-    "trl>=0.8",
+    "transformers>=4.40,<6",
+    "peft>=0.10,<1",
+    "trl>=0.8,<2",
     "datasets>=2.18",
     "accelerate>=0.28",
     "bitsandbytes>=0.43",
