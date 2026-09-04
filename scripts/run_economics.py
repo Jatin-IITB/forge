@@ -45,15 +45,26 @@ DEFAULT_PRICING = {
     # (USD per 1M tokens). We measured on the free tier; we PRICE at paid.
     "teacher_input_per_1m": 0.25,
     "teacher_output_per_1m": 0.69,
-    # Student: Apple M-series laptop, on-device.
+    # Student: ASUS Vivobook Pro 15 with an RTX 3050 Ti Laptop GPU, on-device.
+    # Bought for INR 85,000, converted at 83 INR/USD -- the rate giving the
+    # HIGHEST dollar figure of the plausible 83-88 range, because a dearer
+    # machine makes our own cost ratio worse. Same direction as pricing the
+    # teacher at paid rates while measuring on the free tier.
     #   hardware: purchase price amortized over a 4-year useful life, assuming
     #   the machine is busy 8h/day (a generous-to-the-teacher assumption: idle
     #   time makes the student look *worse* here, not better).
-    "student_hardware_usd": 1599.0,
+    #
+    # Changed 2026-09-05 from a 16 GB M1 ($1599, 22 W), which is no longer the
+    # reference machine. Artifacts written before that date used the M1 model
+    # and are NOT comparable on cost; they are identifiable by the `machine`
+    # field, which newer artifacts carry and older ones lack.
+    "student_hardware_usd": 1024.0,
     "student_life_years": 4.0,
     "student_busy_hours_per_day": 8.0,
-    # energy: sustained package power under inference load x local tariff.
-    "student_watts": 22.0,
+    # energy: sustained wall draw under inference load x local tariff. 120 W is
+    # the adapter rating, used as an upper bound until measured -- overstating
+    # draw overstates our cost, which is the safe direction.
+    "student_watts": 120.0,
     "student_usd_per_kwh": 0.12,
 }
 

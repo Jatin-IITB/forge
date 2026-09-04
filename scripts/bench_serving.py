@@ -70,13 +70,27 @@ from forge.schema import PIIRecord
 # and a silent drift between the two would be invisible in the report. The
 # assertion in `_check_cost_model_parity` fails loudly if they diverge.
 # ---------------------------------------------------------------------------
+# Defaults describe the CURRENT reference machine: an ASUS Vivobook Pro 15 with
+# an RTX 3050 Ti Laptop GPU, bought for INR 85,000. Converted at 83 INR/USD --
+# the rate giving the HIGHEST dollar figure of the plausible range, because a
+# more expensive machine makes our own cost ratio worse. That is the same
+# direction as pricing the teacher at paid rates when we measured on the free
+# tier: every judgement call is taken against ourselves.
+#
+# Artifacts written before 2026-09-05 used a 16 GB M1 ($1599, 22 W) and are not
+# comparable on cost. Every artifact now records `machine` and the effective
+# model, so a figure cannot be silently read against the wrong hardware.
 COST_MODEL = {
-    "student_hardware_usd": 1599.0,
+    "student_hardware_usd": 1024.0,
     "student_life_years": 4.0,
     "student_busy_hours_per_day": 8.0,
-    "student_watts": 22.0,
+    # Sustained wall draw under inference load. 120 W is the adapter rating,
+    # used as an upper bound until a measured figure replaces it -- again the
+    # conservative direction, since overstating draw overstates our cost.
+    "student_watts": 120.0,
     "student_usd_per_kwh": 0.12,
 }
+DEFAULT_MACHINE = "asus-vivobook-pro-15-rtx3050ti"
 
 
 def _check_cost_model_parity() -> str | None:
@@ -96,16 +110,29 @@ def _check_cost_model_parity() -> str | None:
     return None
 
 
-def usd_per_1k(sustained_s_per_record: float, watts: float | None = None) -> dict:
+def usd_per_1k(
+    sustained_s_per_record: float,
+    watts: float | None = None,
+    hardware_usd: float | None = None,
+    machine: str | None = None,
+) -> dict:
     """On-device cost for 1k records: amortized hardware + metered energy.
 
     The input is *machine*-seconds per record, not per-request latency. Under
     concurrency these differ by roughly the concurrency factor, and using the
     wrong one is the single easiest way to fake this gate.
+
+    `hardware_usd` and `machine` exist because the second-easiest way to fake it
+    is quoting one machine's throughput against another machine's price. The
+    reference machine changed once already, and the two differ enough to move G3
+    by ~2x on the hourly rate alone, so the effective model and the machine label
+    travel with every number.
     """
     cm = dict(COST_MODEL)
     if watts is not None:
         cm["student_watts"] = watts
+    if hardware_usd is not None:
+        cm["student_hardware_usd"] = hardware_usd
     busy_hours = cm["student_life_years"] * 365 * cm["student_busy_hours_per_day"]
     hw_per_hour = cm["student_hardware_usd"] / busy_hours
     machine_hours_per_1k = sustained_s_per_record * 1000 / 3600
@@ -118,6 +145,12 @@ def usd_per_1k(sustained_s_per_record: float, watts: float | None = None) -> dic
         "machine_hours_per_1k": machine_hours_per_1k,
         "hardware_usd_per_hour": hw_per_hour,
         "watts": cm["student_watts"],
+        # Carried so a cost figure can never be read against the wrong laptop.
+        "machine": machine or DEFAULT_MACHINE,
+        "hardware_usd": cm["student_hardware_usd"],
+        "life_years": cm["student_life_years"],
+        "busy_hours_per_day": cm["student_busy_hours_per_day"],
+        "usd_per_kwh": cm["student_usd_per_kwh"],
     }
 
 
@@ -516,7 +549,8 @@ def summarize(args, run: Run, gold: list[PIIRecord]) -> dict:
     # THE number the cost gate consumes: machine-seconds per record. Derived from
     # wall clock over the whole set, so overlapping requests are counted once.
     sustained = run.wall_clock_s / n if n else 0.0
-    econ = usd_per_1k(sustained, watts=args.watts)
+    econ = usd_per_1k(sustained, watts=args.watts,
+                      hardware_usd=args.hardware_usd, machine=args.machine)
 
     out = {
         "config_name": args.config_name,
@@ -819,6 +853,13 @@ def main() -> int:
     ap.add_argument("--quant", default=None, help="Quantization label for the record")
     ap.add_argument("--watts", type=float, default=None,
                     help="Override sustained package watts for the energy term")
+    ap.add_argument("--hardware-usd", type=float, default=None,
+                    help="Purchase price of the machine being measured. Defaults to "
+                         "the current reference laptop; set it when benchmarking "
+                         "different hardware so the cost is not attributed wrongly")
+    ap.add_argument("--machine", default=None,
+                    help="Machine label recorded in the artifact, e.g. "
+                         "'asus-vivobook-pro-15-rtx3050ti'")
     ap.add_argument("--server-cmd", default=None, help="Server command line, recorded for provenance")
     ap.add_argument("--llama-cpp-commit", default=None, help="llama.cpp commit, recorded for provenance")
     ap.add_argument("--out", type=Path, default=None, help="Write JSON artifact here")
