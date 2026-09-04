@@ -636,17 +636,49 @@ def _contention() -> dict:
     processes move the numbers. Recording the conditions alongside each result is
     the difference between a measurement and an anecdote — a reader can see
     whether a given figure was taken on a busy machine.
+
+    Cross-platform since 2026-09-05. ``os.getloadavg`` is POSIX-only and raises
+    AttributeError on Windows rather than OSError, so the original guard missed
+    it and every benchmark died before its first record. ``sysctl`` is likewise
+    macOS-only. Contention is context, never a result, so a platform that cannot
+    supply a field omits it instead of failing the run.
     """
     out: dict = {}
+
+    load = None
     try:
         load = os.getloadavg()
+    except (OSError, AttributeError):
+        try:
+            import psutil  # transitive dep of accelerate; simulated on Windows
+
+            load = psutil.getloadavg()
+        except Exception:  # noqa: BLE001
+            load = None
+    if load:
         out["loadavg_1m"], out["loadavg_5m"], out["loadavg_15m"] = [round(x, 2) for x in load]
-    except OSError:
-        return out
-    swap = _sysctl("vm.swapusage") or ""
+
+    swap = _sysctl("vm.swapusage")
     if swap:
         out["swapusage"] = swap
-    out["ncpu"] = _sysctl("hw.ncpu")
+
+    ncpu = _sysctl("hw.ncpu") or str(os.cpu_count() or "")
+    if ncpu:
+        out["ncpu"] = ncpu
+
+    # Where sysctl is absent, report memory pressure through psutil instead.
+    # The question this field answers is "was the machine under load", and a
+    # swap percentage answers it as well as macOS's swapusage string does.
+    if "swapusage" not in out:
+        try:
+            import psutil
+
+            out["mem_percent"] = psutil.virtual_memory().percent
+            out["swap_percent"] = psutil.swap_memory().percent
+        except Exception:  # noqa: BLE001, S110 -- context is optional, never a result
+            pass
+
+    out["platform"] = sys.platform
     return out
 
 
