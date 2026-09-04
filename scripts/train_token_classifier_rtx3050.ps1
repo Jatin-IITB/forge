@@ -66,10 +66,29 @@ if ($Resume) {
 }
 
 New-Item -ItemType Directory -Force (Split-Path $LogPath -Parent) | Out-Null
+
+# Two stderr notices that carry no information for this run: the Hub rate-limit
+# hint (this model is public) and the Windows symlink warning (the cache falls
+# back to copies, which costs disk, not correctness).
+$env:HF_HUB_DISABLE_SYMLINKS_WARNING = "1"
+
 Write-Host "Starting RTX 3050 QLoRA training..."
+
+# $ErrorActionPreference = "Stop" turns native-command stderr, once captured by
+# 2>&1, into a TERMINATING error. Python writes warnings and progress bars to
+# stderr constantly, so with Stop in force a single benign notice kills a
+# multi-hour run before the first training step — which is exactly how this was
+# found: a "set a HF_TOKEN for higher rate limits" hint aborted the run.
+# Relax it only around this call and gate on the exit code, which is the thing
+# that actually reports failure.
+$PreviousErrorAction = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
 & $Python -u @TrainArgs 2>&1 | Tee-Object -FilePath $LogPath
-if ($LASTEXITCODE -ne 0) {
-    throw "Training failed"
+$TrainExitCode = $LASTEXITCODE
+$ErrorActionPreference = $PreviousErrorAction
+
+if ($TrainExitCode -ne 0) {
+    throw "Training failed (exit code $TrainExitCode) — see $LogPath"
 }
 
 Write-Host "Merged classifier: $OutputDir/final-merged"
