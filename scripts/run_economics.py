@@ -255,6 +255,17 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Measure G3 (cost) and G4 (latency).")
     ap.add_argument("--teacher-meta", type=Path, required=True, help="Teacher .meta.json")
     ap.add_argument("--student-meta", type=Path, required=True, help="Student .meta.json")
+    # Pricing flags are generated from DEFAULT_PRICING further down, so
+    # --student-hardware-usd, --student-watts and friends already exist. What
+    # was missing is a label: the numbers are settable but the artifact never
+    # recorded WHICH machine they described, so a cost figure could silently be
+    # read against the wrong hardware. That is the easiest available way to fake
+    # G3, and it matters now that the reference machine has changed.
+    ap.add_argument(
+        "--machine", default=None,
+        help="Label for the machine measured, e.g. 'rtx3050ti-laptop'. Recorded "
+             "in the report alongside the pricing it was measured under",
+    )
     ap.add_argument("--contract", type=Path, default=Path("contracts/pii_redaction_v2.yaml"))
     ap.add_argument("--output", type=Path, default=None, help="Write markdown report here")
     for key, val in DEFAULT_PRICING.items():
