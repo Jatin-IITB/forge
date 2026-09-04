@@ -1,7 +1,15 @@
-"""BIOES alignment and constrained decoding tests."""
+"""BIOES alignment and constrained decoding tests.
+
+Skipped unless the training extras are installed. `make install` deliberately
+pulls only [dev,data] so the eval path stays lightweight, and a torch import at
+module scope made the whole suite uncollectable on a fresh clone rather than
+skipping the handful of tests that actually need it.
+"""
 
 import pytest
-import torch
+
+torch = pytest.importorskip("torch", reason="needs the [train] extra")
+transformers = pytest.importorskip("transformers", reason="needs the [train] extra")
 from transformers import Qwen2Config
 
 from forge.schema import PIIRecord, PIISpan, PIIType

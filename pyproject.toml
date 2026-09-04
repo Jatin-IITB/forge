@@ -9,6 +9,10 @@ requires-python = ">=3.10"
 dependencies = [
     "pydantic>=2.6",
     "pyyaml>=6.0",
+    # forge/ci.py builds every published confidence interval and is imported by
+    # scripts/run_eval.py --ci. It was undeclared until 2026-09-04, so a fresh
+    # `make install` produced a venv where tests could not even be collected.
+    "numpy>=1.26",
 ]
 
 [project.optional-dependencies]
