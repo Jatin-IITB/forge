@@ -99,7 +99,12 @@ def _fragment_span(text: str, frag: dict) -> tuple[int, int, str] | None:
     return int(start), int(end), frag.get("value") or text[int(start) : int(end)]
 
 
-def convert(rows, *, max_records: int | None = None) -> tuple[list[PIIRecord], dict]:
+def convert(
+    rows,
+    *,
+    max_records: int | None = None,
+    max_chars: int | None = None,
+) -> tuple[list[PIIRecord], dict]:
     """Map BigCode rows to PIIRecord, dropping anything that does not verify.
 
     Offsets are checked against the text exactly as `scripts/audit_gold.py`
@@ -116,6 +121,16 @@ def convert(rows, *, max_records: int | None = None) -> tuple[list[PIIRecord], d
         text = row.get("text") or ""
         if not text.strip():
             stats["skipped_empty_text"] += 1
+            continue
+
+        # The token classifier was trained at max_length 128 and
+        # `bench_serving.py` RAISES rather than scoring a truncated document --
+        # correctly, since "recall over the first N tokens" is not recall. A
+        # 50-line code file does not fit, so records that cannot be scored whole
+        # are excluded here and COUNTED, making the restriction a reported
+        # subset rather than a silent one.
+        if max_chars is not None and len(text) > max_chars:
+            stats["skipped_too_long"] += 1
             continue
 
         spans: list[PIISpan] = []
@@ -180,6 +195,13 @@ def main() -> int:
     ap.add_argument("--split", default="train")
     ap.add_argument("--max-records", type=int, default=None)
     ap.add_argument(
+        "--max-chars", type=int, default=440,
+        help="Exclude records longer than this. Default 440 ~= 128 tokens at "
+             "~3.4 chars/token, matching the classifier's training window. "
+             "bench_serving raises on truncation rather than scoring a partial "
+             "document, so longer records cannot be scored at all",
+    )
+    ap.add_argument(
         "--local-json", type=Path, default=None,
         help="Read a locally downloaded JSON/JSONL instead of calling the Hub",
     )
@@ -208,7 +230,7 @@ def main() -> int:
             )
             return 1
 
-    records, stats = convert(rows, max_records=args.max_records)
+    records, stats = convert(rows, max_records=args.max_records, max_chars=args.max_chars)
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with args.out.open("w", encoding="utf-8") as f:
@@ -219,7 +241,18 @@ def main() -> int:
     hs = {t.value for t in HIGH_SEVERITY}
     per_type = Counter(s.label.value for r in records for s in r.spans)
 
+    skipped_long = stats.get("skipped_too_long", 0)
+    total_seen = len(records) + skipped_long + stats.get("skipped_empty_text", 0)
     print(f"wrote {len(records)} records, {n_spans} spans -> {args.out}")
+    if skipped_long:
+        pct = skipped_long / max(total_seen, 1) * 100
+        print(
+            f"\n  EXCLUDED {skipped_long} of {total_seen} records ({pct:.1f}%) as longer than "
+            f"{args.max_chars} chars.\n"
+            f"  The classifier trains at max_length 128 and the harness refuses to score a\n"
+            f"  truncated document. Any result from this file therefore describes SHORT code\n"
+            f"  files only, and must be reported that way."
+        )
     print("\nper-type coverage:")
     for t, n in per_type.most_common():
         print(f"  {t:<14}{n:>6}{'  *high-severity' if t in hs else ''}")
