@@ -50,7 +50,11 @@ logs/
 
 # Private working docs (aspirational drafts — must not ship publicly)
 RESUME_BRIEF.md
-data/ood_probe.jsonl
+# data/ood_probe.jsonl and data/carriers_v3.jsonl are EVALUATION assets, not
+# generated bulk: G6 is a contract gate and train_v3 cannot be rebuilt without
+# the carriers. adr/0003 requires a stranger to rebuild end-to-end from a clone.
+!data/ood_probe.jsonl
+!data/carriers_v3.jsonl
 data/ood_results_*.json
 data/teacher_token_sample.jsonl
 
@@ -58,4 +62,4 @@ data/teacher_token_sample.jsonl
 # Generated, so untracked like every other generated set here — `make carriers`
 # rebuilds them. reports/data_card_v3.md records the count, registers, seed and
 # token cost so the artifact stays described even though it is not committed.
-data/carriers_*.jsonl
+!data/carriers_v3.jsonl
