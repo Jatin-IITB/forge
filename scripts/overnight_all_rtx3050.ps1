@@ -5,8 +5,12 @@
 #   1. preconditions          seconds   fail here rather than at hour two
 #   2. BigCode conversion     minutes   OPTIONAL: a gate problem must not kill
 #                                       the run that matters
-#   3. BIOES alignment gate   seconds   a non-zero count means gold spans are
-#                                       silently dropped before training starts
+#   2b. span normalization    seconds   5 of 1666 records cannot round-trip
+#                                       through BIOES; this is what stopped the
+#                                       first attempt
+#   3. BIOES alignment gate   seconds   independent re-check inside the trainer;
+#                                       a failure means spans are dropped
+#                                       silently before training starts
 #   4. train on v3            ~1.5-2 h  THE EXPERIMENT
 #   5. score on frozen test   minutes   the number that decides G1
 #   6. BigCode eval           minutes   OPTIONAL, supplementary
@@ -18,8 +22,9 @@
 # capacity and data JOINTLY binding, so this run holds every hyperparameter
 # fixed and changes only the corpus. Whatever moves is attributable to the data.
 #
-#     train_v2         837 records  1519 spans    0 teacher-labelled
-#     train_v3_clean  1666 records  4863 spans  179 teacher-labelled
+#     train_v2           837 records  1519 spans    0 teacher-labelled
+#     train_v3_clean    1666 records  4863 spans  179 teacher-labelled
+#     train_v3_aligned  1662 records  4847 spans   after step 2b drops 4
 #
 # PRE-REGISTERED PREDICTIONS (ADR 0013 discipline: report against these even
 # where they fail; the conjunction is what makes a run informative).
@@ -37,6 +42,8 @@
 
 param(
     [string]$TrainData    = "data/train_v3_clean.jsonl",
+    [string]$AlignedData  = "data/train_v3_aligned.jsonl",
+    [string]$AlignedSha   = "726d516d4dbbf62ca1351edb128ed73eaff21780b7f0edd7b814475ea4f943b7",
     [string]$ValData      = "data/gold/val.jsonl",
     [string]$Gold         = "data/gold/test.jsonl",
     [string]$OutputDir    = "checkpoints/token_classifier_v3",
@@ -123,14 +130,53 @@ if (-not $SkipBigcode) {
         "--max-chars", "440"
     )
     if (-not $bigcodeReady) {
-        Write-Host "  BigCode needs the gate accepted in a browser AND huggingface-cli login." -ForegroundColor Yellow
-        Write-Host "  The v3 experiment below is unaffected." -ForegroundColor Yellow
+        Write-Host "  BigCode is a GATED dataset. To enable it for a later run:" -ForegroundColor Yellow
+        Write-Host "    1. open https://huggingface.co/datasets/bigcode/bigcode-pii-dataset" -ForegroundColor Yellow
+        Write-Host "       and accept the terms while signed in" -ForegroundColor Yellow
+        Write-Host "    2. .venv\Scripts\huggingface-cli.exe login   (paste a read token)" -ForegroundColor Yellow
+        Write-Host "  The v3 experiment below does not depend on it and continues now." -ForegroundColor Yellow
     }
 }
 
+# --- 2b. make the corpus representable in BIOES ----------------------------
+# The first attempt died here. Five records of 1666 cannot round-trip: one has a
+# trailing space inside a STREET_ADDRESS span (a label defect -- whitespace is
+# not PII, so it is trimmed) and four end a URL where Qwen merges "/)" into a
+# single token, leaving no boundary for BIOES to mark (gold is correct there;
+# the record is unrepresentable, so it is dropped and counted). See the header
+# of normalize_spans.py for why the decoder is deliberately NOT changed instead.
+#
+# The frozen test and val sets are clean at 0 defects, verified separately
+# below, so none of this touches evaluation.
+Invoke-Step "Normalize spans for BIOES" @(
+    "scripts/normalize_spans.py",
+    "--in", $TrainData, "--out", $AlignedData, "--max-length", "128"
+)
+if (-not (Test-Path $AlignedData)) { throw "Normalizer wrote nothing to $AlignedData" }
+
+# The aligned corpus is generated here rather than copied, so this hash checks
+# that this machine derived the same corpus the laptop did. A mismatch is worth
+# knowing about but is not fatal: the normalizer re-verifies its own output
+# byte-for-byte before exiting, so the file is safe to train on regardless.
+$alignedActual = (Get-FileHash $AlignedData -Algorithm SHA256).Hash.ToLower()
+if ($alignedActual -ne $AlignedSha) {
+    [void]$Warnings.Add("aligned corpus sha differs from the reference ($alignedActual)")
+    Write-Host "  NOTE: aligned sha $alignedActual" -ForegroundColor Yellow
+    Write-Host "        reference    $AlignedSha" -ForegroundColor Yellow
+    Write-Host "        Self-verified, training anyway. Report this line back." -ForegroundColor Yellow
+} else {
+    Write-Host "  aligned corpus matches the reference sha" -ForegroundColor Green
+}
+
+# Cheap guard on evaluation integrity: the gold sets must need no normalization
+# at all. If this ever fires, every score in the ledger is suspect.
+Invoke-Step "Gold sets need no normalization" @(
+    "scripts/normalize_spans.py", "--in", $Gold, "--check-only", "--max-length", "128"
+)
+
 $CommonArgs = @(
     "scripts/train_token_classifier.py",
-    "--train-data", $TrainData,
+    "--train-data", $AlignedData,
     "--val-data", $ValData,
     "--base-model", "Qwen/Qwen2.5-1.5B-Instruct",
     "--output-dir", $OutputDir,
