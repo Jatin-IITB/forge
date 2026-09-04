@@ -3,6 +3,7 @@ param(
     [string]$ValData = "data/gold/val.jsonl",
     [string]$OutputDir = "checkpoints/token_classifier_rtx3050",
     [string]$LogPath = "logs/token_classifier_rtx3050.log",
+    [string]$LearningRate = "2e-4",
     [switch]$Resume
 )
 
@@ -49,7 +50,7 @@ $CommonArgs = @(
     "--batch-size", "1",
     "--grad-accum", "16",
     "--max-length", "128",
-    "--lr", "2e-4"
+    "--lr", $LearningRate
 )
 
 Write-Host "Verifying exact BIOES round trips before loading the model..."
