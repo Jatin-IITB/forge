@@ -53,7 +53,13 @@ param(
     [string]$TransferDir  = "C:\transfer",
     [string]$ExpectedSha  = "53174c966654776797736675b29cdbcb83fdb8d351fa2fd48f1978ff49f77903",
     [string]$LearningRate = "2e-4",
-    [switch]$SkipBigcode
+    [switch]$SkipBigcode,
+    # Resume after a failure downstream of training. The first run trained for
+    # 78 minutes and then died in scoring on a one-line defect; repeating the
+    # training to reach the fix would be pure waste, and worse, would silently
+    # produce a DIFFERENT model to score. Not a default: a plain re-run must
+    # always mean a full rebuild.
+    [switch]$SkipTraining
 )
 
 $ErrorActionPreference = "Stop"
@@ -196,10 +202,20 @@ $CommonArgs = @(
 Invoke-Step "BIOES alignment gate" ($CommonArgs + @("--verify-alignment-only"))
 
 # --- 4. the experiment ------------------------------------------------------
-Invoke-Step "Training on filtered v3" $CommonArgs
-
 $Merged = Join-Path $OutputDir "final-merged"
-if (-not (Test-Path $Merged)) { throw "No merged model at $Merged" }
+if ($SkipTraining) {
+    if (-not (Test-Path $Merged)) {
+        throw "-SkipTraining given but no model at $Merged. Drop the switch and train."
+    }
+    Write-Host ""
+    Write-Host "=== Training SKIPPED, scoring the existing model ===" -ForegroundColor Yellow
+    Write-Host "  $Merged" -ForegroundColor Yellow
+    Write-Host "  last written: $((Get-Item $Merged).LastWriteTime)" -ForegroundColor Yellow
+    [void]$Warnings.Add("training skipped (-SkipTraining); scored a pre-existing model")
+} else {
+    Invoke-Step "Training on filtered v3" $CommonArgs
+    if (-not (Test-Path $Merged)) { throw "No merged model at $Merged" }
+}
 
 # --- 5. score on the FROZEN test set ---------------------------------------
 Invoke-Step "Inference: frozen test set (raw text, CUDA)" @(

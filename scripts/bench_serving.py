@@ -581,7 +581,13 @@ def summarize(args, run: Run, gold: list[PIIRecord]) -> dict:
         "sustained_s_per_record": round(sustained, 5),
         "records_per_s": round(1 / sustained, 4) if sustained else 0.0,
         "usd_per_1k": round(econ["usd_per_1k"], 6),
-        "cost_breakdown": {k: round(v, 6) for k, v in econ.items()},
+        # `machine` is a string, and rounding the dict blindly crashed on it the
+        # first time this ran after that field was added. Round the numbers, pass
+        # the label through -- dropping it would defeat the reason it is carried.
+        "cost_breakdown": {
+            k: round(v, 6) if isinstance(v, (int, float)) else v
+            for k, v in econ.items()
+        },
 
         # --- G4 inputs (per-request round trip; inflates under concurrency) ---
         "latency": {
@@ -756,7 +762,14 @@ def print_summary(d: dict) -> None:
     print()
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """Split out from main() so tests can construct real args.
+
+    `summarize` reads ~30 attributes off the Namespace. A test that hand-builds
+    one duplicates the CLI and drifts from it, which is the same defect class as
+    the crash this file's tests exist to prevent -- so the test takes its
+    defaults from here instead.
+    """
     ap = argparse.ArgumentParser(
         description="Measure serving latency and sustained throughput (gates G3/G4).")
     ap.add_argument(
@@ -865,6 +878,11 @@ def main() -> int:
     ap.add_argument("--out", type=Path, default=None, help="Write JSON artifact here")
     ap.add_argument("--save-predictions", type=Path, default=None,
                     help="Also write predictions JSONL (for scoring with run_eval.py)")
+    return ap
+
+
+def main() -> int:
+    ap = build_parser()
     args = ap.parse_args()
 
     if (

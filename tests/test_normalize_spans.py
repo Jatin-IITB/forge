@@ -15,9 +15,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from normalize_spans import trim_record  # noqa: E402
+from normalize_spans import trim_record
 
-from forge.schema import PIIRecord, PIISpan, PIIType  # noqa: E402
+from forge.schema import PIIRecord, PIISpan, PIIType
 
 
 def _record(text: str, spans: list[tuple[int, int, PIIType]]) -> PIIRecord:

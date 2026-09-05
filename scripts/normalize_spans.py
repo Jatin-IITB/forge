@@ -133,8 +133,8 @@ def _find_tokenizer_json(base_model: str) -> Path:
         from huggingface_hub import hf_hub_download
 
         return Path(hf_hub_download(base_model, "tokenizer.json"))
-    except Exception:  # noqa: BLE001 - offline or no hub; try the cache directly
-        pass
+    except Exception as exc:  # noqa: BLE001 - offline, unauthenticated, or no hub
+        print(f"  hub lookup failed ({type(exc).__name__}), trying the local cache")
 
     stem = "models--" + base_model.replace("/", "--")
     roots = [
