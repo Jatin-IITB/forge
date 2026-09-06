@@ -116,7 +116,7 @@ class TestCatchesEachOutOfDomainFamily:
         """21/21 as measured. Recorded so a regression is visible as a number."""
         if not PROBES.exists():
             pytest.skip("probe set not built")
-        probes = [json.loads(x) for x in PROBES.read_text().splitlines() if x.strip()]
+        probes = [json.loads(x) for x in PROBES.read_text(encoding="utf-8").splitlines() if x.strip()]
         ood = [p for p in probes if p["category"] == "out_of_domain"]
         missed = [p["id"] for p in ood if not detect_out_of_domain(p["text"]).is_ood]
         assert missed == [], f"gate missed {missed}"
@@ -125,7 +125,7 @@ class TestCatchesEachOutOfDomainFamily:
         """They carry real PII behind an attack — refusing them is the attack working."""
         if not PROBES.exists():
             pytest.skip("probe set not built")
-        probes = [json.loads(x) for x in PROBES.read_text().splitlines() if x.strip()]
+        probes = [json.loads(x) for x in PROBES.read_text(encoding="utf-8").splitlines() if x.strip()]
         adv = [p for p in probes if p["category"] == "adversarial"]
         refused = [p["id"] for p in adv if detect_out_of_domain(p["text"]).is_ood]
         assert refused == [], f"gate refused adversarial probes: {refused}"

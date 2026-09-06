@@ -17,7 +17,24 @@ dependencies = [
 
 [project.optional-dependencies]
 data = [
-    "faker>=24.0",   # MIT — synthetic PII values for the gold/train builder
+    # MIT — synthetic PII values for the gold/train builder.
+    #
+    # The ceiling is NOT cosmetic. This was an unbounded `faker>=24.0` until
+    # 2026-09-07, when `test_gold_builder.py::test_reproducibility` was found
+    # failing: a fresh build differs from the committed gold set in 116/385
+    # records. Faker's provider data (name/email/IP pools) changes between
+    # releases, so the same seed yields different values while the RNG stream
+    # stays aligned -- which is why 267 records after the first difference are
+    # still byte-identical, and why this is not a cascade.
+    #
+    # HONEST LIMIT: this bound stops further silent drift; it does NOT restore
+    # reproducibility. ~25 versions were bisected in an isolated install
+    # (15.0 -> 40.38.0) and the diff count sits in three plateaus -- 283 (<=27.1),
+    # 123 (27.2-39.x), 116 (all of 40.x) -- never reaching zero. NO available
+    # Faker rebuilds the committed bytes. The gold set is therefore a committed
+    # artifact, verifiable by hash but not regenerable, and the contract forbids
+    # regenerating it to make the test pass. See NORTH_STAR row 6(c).
+    "faker>=24.0,<41",
 ]
 infer = [
     "openai>=1.0",   # OpenAI-compatible API client for vLLM / Ollama / etc.

@@ -10,14 +10,27 @@ ledger) and `ACTION_PLAN.md` (the phase playbook).*
 
 Every number below comes from a committed artifact, not an estimate.
 
+> **Updated 2026-09-07.** The table below now reports the **v4 token classifier** (ADR 0017)
+> for quality, and the **shipped Q8_0 generative GGUF** for deployability — because those are
+> two different artifacts. That split is itself the top open problem; see §1a.
+
 | Gate | Definition | Teacher | System / student | Ratio | Threshold | Verdict |
 |---|---|---|---|---|---|---|
-| **G1** | micro-F1 parity | 0.9482 | **0.5750** (model-only) | 0.607× | ≥ 0.98× | ❌ |
-| **G2** | schema validity | 0.7844 | **0.9974** | — | ≥ 0.999 | ❌ *(1 record)* |
-| **G3** | $ / 1k records | $0.1592 | **$0.1910** | **1.20×** | ≤ 0.1× | ❌ |
-| **G4** | p95 latency | 8.02 s | **8.68 s** | **1.08×** | ≤ 0.2× | ❌ |
-| **G5** | deployability | — | fp16 on MPS, unquantized | — | quantized, CPU-capable | ❌ |
-| **G6** | OOD / adversarial | — | probe set built, unscored on a passing model | — | per contract | ⏸ |
+| **G1** | micro-F1 parity | 0.9482 | **0.9755** (model-only, v4) | **1.029×** | ≥ 0.98× | ✅ |
+| **G2** | schema validity | 0.7844 | **1.0000** (385/385, structural) | — | ≥ 0.999 | ✅ |
+| **G3** | $ / 1k records | $0.1594 | **$0.03004** (generative, M1) | 0.189× | ≤ 0.1× | ❌ *(v4 un-measured on M1)* |
+| **G4** | p95 latency | 1.364 s | **5.413 s** (generative, M1) | 3.97× | ≤ 0.2× | ❌ *(v4 un-measured on M1)* |
+| **G5** | deployability | — | Q8_0 GGUF, 1647 MB, llama.cpp Metal | — | quantized, CPU-capable | ✅ *(generative only)* |
+| **G6** | OOD / adversarial | — | OOD 1.0000 (21/21), adv 0.9000 (9/10) | — | ≥ 0.90 both | ✅ |
+
+### 1a. The gate table does not describe one model
+
+**G1/G2 are held by the v4 token classifier. G3/G4/G5 are measured on the generative Q8_0
+GGUF.** No single artifact currently passes all six, and the contract's definition of done
+requires that it does. The classifier has never run on the M1 and has no quantized export;
+llama.cpp serves causal LMs and a 77-label tagging head is not one (ADR 0017, "Given up").
+
+Closing this is the critical path, and it is *not* an accuracy problem any more.
 
 Alongside those failures, three results are solid and worth protecting:
 
@@ -233,7 +246,12 @@ a single scored run against the frozen test set.
 
 ---
 
-### WP-4 — Recall repair *(conditional — only if WP-3 prediction 2 fails)*
+### WP-4 — Recall repair *(**CLOSED 2026-09-07** — exit gate met by ADR 0017, ladder never climbed)*
+
+> Closed on the second branch of its own exit gate: *"a written finding that the task
+> formulation is the ceiling."* Span ratio went from **0.46** (generative) to **0.994** (token
+> classifier) without touching any of the four rungs below. Recall is **0.9727**. The ladder is
+> kept here as the record of a diagnosis that turned out to be aimed at the wrong axis.
 
 If span ratio stays below 0.85, the model is not enumerating entities and no amount of data
 will fix it. Escalation ladder, cheapest first:
@@ -252,7 +270,10 @@ ceiling.
 
 ---
 
-### WP-5 — QLoRA + AWQ *(hardware-blocked — a rented GPU, not a code problem)*
+### WP-5 — QLoRA + AWQ *(**QLoRA done 2026-09-07** on an RTX 3050; AWQ still open)*
+
+> Ledger row 14 closed: v4 trained with `--qlora`, 3 epochs, 465 steps, ~36.9 h. Row 16 (AWQ)
+> is unchanged and still wants a CUDA session.
 
 `bitsandbytes` has no MPS backend; AWQ calibration needs CUDA kernels. `export_model.py awq`
 already refuses with an explanation rather than silently skipping — keep it that way.
